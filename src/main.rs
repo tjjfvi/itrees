@@ -11,7 +11,10 @@ use word::*;
 
 use std::fmt::Debug;
 
-struct Net;
+#[derive(Default)]
+struct Net {
+  scratch: Vec<u64>,
+}
 
 impl Net {
   fn link(&mut self, a: Ref, b: Ref) {
@@ -51,47 +54,71 @@ impl Net {
   }
 
   fn annihilate(&mut self, mut a: Tree, mut b: Tree) {
-    // todo!();
-    // let mut n = 1;
-    // let a = a.borrow_mut();
-    // let b = b.borrow_mut();
-    // match (a.borrow().unpack(), b.borrow().unpack()) {
-    //   (UnpackedTreeRef::Era, UnpackedTreeRef::Era) => {}
-    //   (UnpackedTreeRef::Era, Unpack => {
-    //     for &x in b.refs() {
-    //       self.erase(x);
-    //     }
-    //     b.destroy();
-    //   }
-    //   UnpackedTreeRef::Con {
-    //     header,
-    //     left,
-    //     right,
-    //   } => {}
-    //   _ => todo!(),
-    // }
+    let mut cur_a = TreeRange::FULL;
+    let mut cur_b = TreeRange::FULL;
+    {
+      match (a.slice(cur_a).unpack_node(), b.slice(cur_b).unpack_node()) {
+        (UnpackedTreeNode::Era, UnpackedTreeNode::Era) => {}
+        (UnpackedTreeNode::Era, UnpackedTreeNode::Ref(r)) => self.erase(r),
+        (UnpackedTreeNode::Ref(r), UnpackedTreeNode::Era) => self.erase(r),
+        (UnpackedTreeNode::Ref(a), UnpackedTreeNode::Ref(b)) => self.link(a, b),
+        (UnpackedTreeNode::Era, UnpackedTreeNode::Ctr(left, right)) => {
+          self._annihilate_stack_push(cur_a, right);
+          self._annihilate_stack_push(cur_a, left);
+        }
+        (UnpackedTreeNode::Ctr(left, right), UnpackedTreeNode::Era) => {
+          self._annihilate_stack_push(right, cur_b);
+          self._annihilate_stack_push(left, cur_a);
+        }
+        (UnpackedTreeNode::Ctr(a_left, a_right), UnpackedTreeNode::Ctr(b_left, b_right)) => {
+          self._annihilate_stack_push(a_right, b_right);
+          self._annihilate_stack_push(a_left, b_left);
+        }
+        (UnpackedTreeNode::Ref(_), UnpackedTreeNode::Ctr(left, right)) => todo!(),
+        (UnpackedTreeNode::Ctr(left, right), UnpackedTreeNode::Ref(_)) => todo!(),
+        (_, UnpackedTreeNode::Cup(_)) => todo!(),
+        (UnpackedTreeNode::Cup(_), _) => todo!(),
+      }
+    }
+  }
+
+  fn _annihilate_stack_push(&mut self, a: TreeRange, b: TreeRange) {
+    // self.scratch.push(bytemuck::must_cast(a));
+    // self.scratch.push(bytemuck::must_cast(b));
   }
 }
 
 fn main() {
   let data = &[
-    UnpackedWord::Ctr(11).pack(),
-    Word(4),
-    UnpackedWord::Ctr(5).pack(),
-    Word(3),
+    UnpackedWord::Ctr(Dimensions {
+      refs_len: 4,
+      form_len: 9,
+    })
+    .pack(),
+    UnpackedWord::Ctr(Dimensions {
+      refs_len: 3,
+      form_len: 5,
+    })
+    .pack(),
     Word::REF,
-    UnpackedWord::Ctr(2).pack(),
-    Word(2),
+    UnpackedWord::Ctr(Dimensions {
+      refs_len: 2,
+      form_len: 3,
+    })
+    .pack(),
     Word::REF,
     Word::REF,
-    UnpackedWord::Ctr(2).pack(),
-    Word(1),
+    UnpackedWord::Ctr(Dimensions {
+      refs_len: 1,
+      form_len: 3,
+    })
+    .pack(),
     Word::ERA,
     Word::REF,
   ];
   let a = Tree::from_form(0, data);
   let b = Tree::from_form(1, data);
-  Net.commute(a, b);
+  Net::default().annihilate(a, b);
   // // println!(
   // //   "{:#?}",
   // //   TreeRef {

@@ -1,14 +1,19 @@
 use bytemuck::{Pod, Zeroable};
-use std::{mem::MaybeUninit, num::NonZeroU16};
+use std::mem::MaybeUninit;
 
 use crate::*;
 
 #[derive(Debug, Clone, Copy)]
 pub struct TreeRange {
-  pub refs_start: u16,
-  pub refs_end: u16,
+  pub refs_start: u8,
   pub form_start: u16,
-  pub form_end: u16,
+}
+
+impl TreeRange {
+  pub const FULL: TreeRange = TreeRange {
+    refs_start: 0,
+    form_start: 0,
+  };
 }
 
 impl std::ops::Add for TreeRange {
@@ -16,13 +21,9 @@ impl std::ops::Add for TreeRange {
 
   #[inline(always)]
   fn add(self, rhs: Self) -> Self::Output {
-    debug_assert!(self.refs_start + rhs.refs_end < self.refs_end);
-    debug_assert!(self.form_start + rhs.form_end < self.form_end);
     TreeRange {
       refs_start: self.refs_start + rhs.refs_start,
-      refs_end: self.refs_start + rhs.refs_end,
       form_start: self.form_start + rhs.form_start,
-      form_end: self.form_start + rhs.form_end,
     }
   }
 }
@@ -31,8 +32,8 @@ impl std::ops::Add for TreeRange {
 pub enum UnpackedTreeNode {
   Era,
   Ref(Ref),
-  Cup { sign: bool, dist: NonZeroU16 },
-  Ctr { left: TreeRange, right: TreeRange },
+  Cup(Cup),
+  Ctr(TreeRange, TreeRange),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -45,8 +46,8 @@ impl<'a> TreeSlice<'a> {
   #[inline(always)]
   pub fn slice(&self, range: TreeRange) -> Self {
     TreeSlice {
-      refs: &self.refs[range.refs_start as usize..range.refs_end as usize],
-      form: &self.form[range.form_start as usize..range.form_end as usize],
+      refs: &self.refs[range.refs_start as usize..],
+      form: &self.form[range.form_start as usize..],
     }
   }
 
@@ -55,33 +56,20 @@ impl<'a> TreeSlice<'a> {
     match self.form[0].unpack() {
       UnpackedWord::Era => UnpackedTreeNode::Era,
       UnpackedWord::Ref => UnpackedTreeNode::Ref(self.refs[0]),
-      UnpackedWord::Cup { sign, dist } => UnpackedTreeNode::Cup { sign, dist },
+      UnpackedWord::Cup(cup) => UnpackedTreeNode::Cup(cup),
       UnpackedWord::Ctr(_) => {
-        let (left_refs_len, left_form_len) = dimensions(&self.form[2..]);
+        let left_dim = self.form[1].unpack().dimensions();
         let left = TreeRange {
           refs_start: 0,
-          refs_end: left_refs_len,
-          form_start: 2,
-          form_end: 2 + left_form_len,
+          form_start: 1,
         };
         let right = TreeRange {
-          refs_start: left_refs_len,
-          refs_end: self.refs.len() as u16,
-          form_start: 2 + left_form_len,
-          form_end: self.form.len() as u16,
+          refs_start: left_dim.refs_len,
+          form_start: 1 + left_dim.form_len,
         };
-        UnpackedTreeNode::Ctr { left, right }
+        UnpackedTreeNode::Ctr(left, right)
       }
     }
-  }
-}
-
-#[inline(always)]
-fn dimensions(form: &[Word]) -> (u16, u16) {
-  match form[0].unpack() {
-    UnpackedWord::Ctr(length) => (form[1].0, 2 + length),
-    UnpackedWord::Ref => (1, 1),
-    _ => (0, 1),
   }
 }
 
@@ -100,15 +88,15 @@ impl<'a> TreeSliceMut<'a> {
   #[inline(always)]
   pub fn slice_mut(&mut self, range: TreeRange) -> TreeSliceMut {
     TreeSliceMut {
-      refs: &mut self.refs[range.refs_start as usize..range.refs_end as usize],
-      form: &mut self.form[range.form_start as usize..range.form_end as usize],
+      refs: &mut self.refs[range.refs_start as usize..],
+      form: &mut self.form[range.form_start as usize..],
     }
   }
   #[inline(always)]
   pub fn into_slice_mut(self, range: TreeRange) -> Self {
     TreeSliceMut {
-      refs: &mut self.refs[range.refs_start as usize..range.refs_end as usize],
-      form: &mut self.form[range.form_start as usize..range.form_end as usize],
+      refs: &mut self.refs[range.refs_start as usize..],
+      form: &mut self.form[range.form_start as usize..],
     }
   }
   #[inline(always)]
@@ -128,7 +116,8 @@ delegate_debug!({impl Debug for Tree} (self) => (self.kind, self.borrow()));
 #[repr(C)]
 pub struct TreeHeader {
   kind: u32,
-  refs_len: u16,
+  _pad: u8,
+  refs_len: u8,
   form_len: u16,
 }
 
@@ -189,9 +178,10 @@ impl Tree {
     }
   }
   pub fn from_form(kind: u32, form: &[Word]) -> Tree {
-    let (refs_len, form_len) = dimensions(form);
+    let Dimensions { refs_len, form_len } = form[0].unpack().dimensions();
     let header = TreeHeader {
       kind,
+      _pad: 0,
       refs_len,
       form_len,
     };
@@ -213,7 +203,8 @@ impl Tree {
     unsafe {
       TreeHeader {
         kind: self.kind,
-        refs_len: (*self.refs).len() as u16,
+        _pad: 0,
+        refs_len: (*self.refs).len() as u8,
         form_len: (*self.form).len() as u16,
       }
     }
