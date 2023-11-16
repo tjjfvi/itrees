@@ -6,7 +6,6 @@ use logos::{Lexer, Logos};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
   LexError,
-  // UnexpectedToken,
   UnexpectedEOF,
   ExpectedNumber,
   ExpectedTree,
@@ -160,9 +159,7 @@ pub fn parse_program<'a>(
 ) -> Result<(*mut [Word], Net), Error> {
   let mut lexer = lexer.peekable();
   let mut trees = vec![];
-  let mut net = Net {
-    active: Default::default(),
-  };
+  let mut net = Net::default();
   let (mut scope, mut vars) = Default::default();
   while !matches!(lexer.peek(), Some(Ok(Token::Eq)) | None) {
     parse_tree_into(None, &mut trees, &mut lexer, &mut scope, &mut vars)?;

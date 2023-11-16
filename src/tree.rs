@@ -25,7 +25,7 @@ pub fn unpack_node(tree: &Tree) -> UnpackedTreeNode {
 
 pub type RawTree = *mut usize;
 
-// delegate_debug!({impl Debug for Tree} (self) => (self.kind, self.borrow()));
+delegate_debug!({impl Debug for OwnedTree} (self) => (self.kind, &*self));
 
 pub struct OwnedTree {
   pub raw: RawTree,
@@ -53,6 +53,7 @@ impl OwnedTree {
     let tree = std::ptr::slice_from_raw_parts_mut(tree, (*tree).unpack().length());
     OwnedTree { raw, kind, tree }
   }
+  #[inline(never)]
   pub fn new(kind: usize, tree: &Tree) -> OwnedTree {
     let len = tree[0].unpack().length();
     let mut buffer = Box::<[usize]>::new_uninit_slice(1 + len);
@@ -66,6 +67,7 @@ impl OwnedTree {
     };
     unsafe { OwnedTree::from_raw(Box::into_raw(buffer) as *mut _) }
   }
+  #[inline(never)]
   pub fn take(kind: usize, tree: &Tree) -> OwnedTree {
     let len = tree[0].unpack().length();
     let mut buffer = Box::<[usize]>::new_uninit_slice(1 + len);

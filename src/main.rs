@@ -14,11 +14,16 @@ use r#ref::*;
 use tree::*;
 use word::*;
 
-use std::fmt::Debug;
+use std::{
+  fmt::Debug,
+  time::{Duration, Instant},
+};
 
 #[derive(Default, Debug)]
 struct Net {
   active: Vec<(RawTree, RawTree)>,
+  av: Vec<(usize, OwnedTree)>,
+  bv: Vec<(usize, OwnedTree)>,
 }
 
 impl Net {
@@ -61,45 +66,45 @@ impl Net {
     Some(())
   }
 
+  #[inline(never)]
   fn commute(&mut self, a: OwnedTree, b: OwnedTree) {
-    let a_indices = a
-      .iter()
-      .enumerate()
-      .filter(|(_, x)| matches!(x.unpack(), UnpackedWord::Ref(_)))
-      .map(|(i, _)| i)
-      .collect::<Vec<_>>();
-    let b_indices = b
-      .iter()
-      .enumerate()
-      .filter(|(_, x)| matches!(x.unpack(), UnpackedWord::Ref(_)))
-      .map(|(i, _)| i)
-      .collect::<Vec<_>>();
-    let mut a_clones = b_indices
-      .iter()
-      .map(|_| OwnedTree::new(a.kind, &*a))
-      .collect::<Vec<_>>();
-    let mut b_clones = a_indices
-      .iter()
-      .map(|_| OwnedTree::new(b.kind, &*b))
-      .collect::<Vec<_>>();
-    for (i, ai) in a_indices.iter().copied().enumerate() {
-      for (j, bj) in b_indices.iter().copied().enumerate() {
+    let mut av = std::mem::take(&mut self.av);
+    let mut bv = std::mem::take(&mut self.bv);
+    av.reserve(a.len());
+    bv.reserve(b.len());
+    av.extend(
+      a.iter()
+        .enumerate()
+        .filter(|(_, x)| matches!(x.unpack(), UnpackedWord::Ref(_)))
+        .map(|(i, _)| (i, OwnedTree::new(b.kind, &*b))),
+    );
+    bv.extend(
+      b.iter()
+        .enumerate()
+        .filter(|(_, x)| matches!(x.unpack(), UnpackedWord::Ref(_)))
+        .map(|(i, _)| (i, OwnedTree::new(a.kind, &*a))),
+    );
+    for &mut (ai, ref mut bc) in av.iter_mut() {
+      for &mut (bj, ref mut ac) in bv.iter_mut() {
         self.link(
-          UnpackedRef::Auxiliary(&mut a_clones[j][ai] as *mut _ as *mut _).pack(),
-          UnpackedRef::Auxiliary(&mut b_clones[i][bj] as *mut _ as *mut _).pack(),
+          UnpackedRef::Auxiliary(&mut ac[ai] as *mut _ as *mut _).pack(),
+          UnpackedRef::Auxiliary(&mut bc[bj] as *mut _ as *mut _).pack(),
         )
       }
     }
-    for (ai, b) in a_indices.iter().copied().zip(b_clones) {
+    for (ai, b) in av.drain(..) {
       self.bind(Ref(a[ai].0), b)
     }
-    for (bi, a) in b_indices.iter().copied().zip(a_clones) {
+    for (bi, a) in bv.drain(..) {
       self.bind(Ref(b[bi].0), a)
     }
     a.drop();
     b.drop();
+    self.av = av;
+    self.bv = bv;
   }
 
+  #[inline(never)]
   fn annihilate(&mut self, a: OwnedTree, b: OwnedTree) {
     let kind = a.kind;
     {
@@ -143,45 +148,43 @@ impl Net {
 }
 
 fn main() {
-  let mut foo = Token::lexer(
-    "
+  let program = "
+out
 
-    out
+c20a = ([[[[[[[[[[[[[[[[[[[(t s) (s r)] (r q)] (q p)] (p o)] (o n)] (n m)] (m l)] (l k)] (k j)] (j i)] (i h)] (h g)] (g f)] (f e)] (e d)] (d c)] (c b)] (b a)] (a R)] (t R))
 
-    add = (
-      (((z i0) o0) ((o0 i1) o1))
-      ((z [i0 i1]) o1)
-    )
-    
-    one = ((z (z o)) o)
-    
-    [one0 [one1 one2]] = one
-    {2 add0 add1} = add
-    
-    add0 = ((one0 one1) two)
-    add1 = ((two one2) three)
-    
-    out = three
-    
-    
-",
-  );
+c20b = ({2 {2 {2 {2 {2 {2 {2 {2 {2 {2 {2 {2 {2 {2 {2 {2 {2 {2 {2 (t s) (s r)} (r q)} (q p)} (p o)} (o n)} (n m)} (m l)} (l k)} (k j)} (j i)} (i h)} (h g)} (g f)} (f e)} (e d)} (d c)} (c b)} (b a)} (a R)} (t R))
+
+c20a = (c20b out)
+";
+
+  let mut d = Duration::ZERO;
+  let n = 100000;
+
+  let mut a = &mut [] as *mut _;
+  let mut b = Net::default();
+  for _ in 0..n {
+    (a, b) = parse_program(&mut Token::lexer(program)).unwrap();
+
+    // println!("{:?}", PrintNet(&*a, &b));
+
+    b.av.reserve(100);
+    b.bv.reserve(100);
+
+    let start = Instant::now();
+
+    let n = inner(&mut b);
+
+    d += start.elapsed();
+
+    // println!("{} steps ({:?})\n", n, start.elapsed());
+  }
 
   unsafe {
-    let (a, mut b) = parse_program(&mut foo).unwrap();
-
-    println!("{:?}", PrintNet(&*a, &b));
-
-    let mut n = 0;
-    while let Some(_) = b.reduce_one() {
-      n += 1;
-      println!("{:?}", PrintNet(&*a, &b));
-    }
-
-    println!("{} steps\n", n);
-
     println!("{:?}", PrintNet(&*a, &b));
   }
+
+  dbg!(d / n);
 
   // let data = &[
   //   UnpackedWord::Ctr(Dimensions {
@@ -226,4 +229,13 @@ fn main() {
   // // //     ]
   // // //   }
   // // // );
+}
+
+#[inline(never)]
+fn inner(b: &mut Net) -> i32 {
+  let mut n = 0;
+  while let Some(_) = b.reduce_one() {
+    n += 1;
+  }
+  n
 }

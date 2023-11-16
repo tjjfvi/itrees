@@ -6,6 +6,9 @@ fn print_tree(f: &mut std::fmt::Formatter, kind: Option<usize>, tree: &[Word]) -
     UnpackedWord::Ref(r) => match r.unpack() {
       UnpackedRef::Principal(t) => unsafe {
         let t = OwnedTree::from_raw(t);
+        if Some(t.kind) == kind {
+          write!(f, "#")?;
+        }
         print_tree(f, Some(t.kind), &*t)
       },
       UnpackedRef::Auxiliary(r) => unsafe {
