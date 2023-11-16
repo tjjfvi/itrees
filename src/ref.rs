@@ -3,27 +3,42 @@ use bytemuck::{Pod, Zeroable};
 
 #[derive(Clone, Copy, Zeroable, Pod)]
 #[repr(transparent)]
-pub struct Ref(pub u64);
+pub struct Ref(pub usize);
 
 delegate_debug!({impl Debug for Ref} (self) => self.unpack());
 
 impl Ref {
+  pub const NULL: Ref = Ref(0);
   #[inline(always)]
   pub fn unpack(self) -> UnpackedRef {
-    UnpackedRef(
-      (self.0 >> 48) as u16,
-      (self.0 & 0x_0000ffff_ffffffff) as *mut _,
-    )
+    if self.0 & 0b10 != 0 {
+      UnpackedRef::Principal((self.0 & !0b10) as _)
+    } else {
+      UnpackedRef::Auxiliary(self.0 as _)
+    }
   }
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct UnpackedRef(pub u16, pub RawTree);
+pub enum UnpackedRef {
+  Principal(RawTree),
+  Auxiliary(*mut Ref),
+}
 
 impl UnpackedRef {
   #[inline(always)]
   pub fn pack(self) -> Ref {
-    debug_assert!(self.1 as u64 >> 48 == 0);
-    Ref(((self.0 as u64) << 48) | self.1 as u64)
+    match self {
+      UnpackedRef::Principal(p) => {
+        let p = p as usize;
+        debug_assert!(p & 0b10 == 0);
+        Ref(p | 0b10)
+      }
+      UnpackedRef::Auxiliary(p) => {
+        let p = p as usize;
+        debug_assert!(p & 0b10 == 0);
+        Ref(p)
+      }
+    }
   }
 }
