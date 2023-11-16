@@ -1,17 +1,22 @@
 #![feature(new_uninit)]
 
+mod parse;
+mod print;
 mod r#ref;
 mod tree;
 mod utils;
 mod word;
 
+use logos::Logos;
+use parse::*;
+use print::*;
 use r#ref::*;
 use tree::*;
 use word::*;
 
 use std::fmt::Debug;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct Net {
   active: Vec<(RawTree, RawTree)>,
 }
@@ -45,6 +50,17 @@ impl Net {
     }
   }
 
+  pub fn reduce_one(&mut self) -> Option<()> {
+    let (a, b) = self.active.pop()?;
+    let (a, b) = unsafe { (OwnedTree::from_raw(a), OwnedTree::from_raw(b)) };
+    if a.kind == b.kind {
+      self.annihilate(a, b);
+    } else {
+      self.commute(a, b);
+    }
+    Some(())
+  }
+
   fn commute(&mut self, a: OwnedTree, b: OwnedTree) {
     let a_indices = a
       .iter()
@@ -67,7 +83,7 @@ impl Net {
       .map(|_| OwnedTree::new(b.kind, &*b))
       .collect::<Vec<_>>();
     for (i, ai) in a_indices.iter().copied().enumerate() {
-      for (j, bj) in a_indices.iter().copied().enumerate() {
+      for (j, bj) in b_indices.iter().copied().enumerate() {
         self.link(
           UnpackedRef::Auxiliary(&mut a_clones[j][ai] as *mut _ as *mut _).pack(),
           UnpackedRef::Auxiliary(&mut b_clones[i][bj] as *mut _ as *mut _).pack(),
@@ -87,12 +103,12 @@ impl Net {
   fn annihilate(&mut self, a: OwnedTree, b: OwnedTree) {
     let kind = a.kind;
     {
-      let mut a = &a[..];
-      let mut b = &b[..];
+      let mut ai = 0;
+      let mut bi = 0;
       let mut a_era_stack = 0;
       let mut b_era_stack = 0;
-      while a.len() != 0 {
-        match (a[0].unpack(), b[0].unpack()) {
+      while ai < a.len() {
+        match (a[ai].unpack(), b[bi].unpack()) {
           (UnpackedWord::Era, UnpackedWord::Era) => {}
           (UnpackedWord::Era, UnpackedWord::Ref(r)) => self.erase(r),
           (UnpackedWord::Ref(r), UnpackedWord::Era) => self.erase(r),
@@ -101,23 +117,23 @@ impl Net {
           (UnpackedWord::Ctr(_), UnpackedWord::Era) => b_era_stack += 2,
           (UnpackedWord::Ctr(_), UnpackedWord::Ctr(_)) => {}
           (UnpackedWord::Ref(r), UnpackedWord::Ctr(l)) => {
-            self.bind(r, OwnedTree::new(kind, b));
-            b = &b[l - 1..];
+            self.bind(r, OwnedTree::take(kind, &b[bi..]));
+            bi += l - 1;
           }
           (UnpackedWord::Ctr(l), UnpackedWord::Ref(r)) => {
-            self.bind(r, OwnedTree::new(kind, a));
-            a = &a[l - 1..];
+            self.bind(r, OwnedTree::take(kind, &a[ai..]));
+            ai += l - 1;
           }
         }
         if a_era_stack != 0 {
           a_era_stack -= 1;
         } else {
-          a = &a[1..];
+          ai += 1;
         }
         if b_era_stack != 0 {
           b_era_stack -= 1;
         } else {
-          b = &b[1..];
+          bi += 1;
         }
       }
     }
@@ -127,6 +143,46 @@ impl Net {
 }
 
 fn main() {
+  let mut foo = Token::lexer(
+    "
+
+    out
+
+    add = (
+      (((z i0) o0) ((o0 i1) o1))
+      ((z [i0 i1]) o1)
+    )
+    
+    one = ((z (z o)) o)
+    
+    [one0 [one1 one2]] = one
+    {2 add0 add1} = add
+    
+    add0 = ((one0 one1) two)
+    add1 = ((two one2) three)
+    
+    out = three
+    
+    
+",
+  );
+
+  unsafe {
+    let (a, mut b) = parse_program(&mut foo).unwrap();
+
+    println!("{:?}", PrintNet(&*a, &b));
+
+    let mut n = 0;
+    while let Some(_) = b.reduce_one() {
+      n += 1;
+      println!("{:?}", PrintNet(&*a, &b));
+    }
+
+    println!("{} steps\n", n);
+
+    println!("{:?}", PrintNet(&*a, &b));
+  }
+
   // let data = &[
   //   UnpackedWord::Ctr(Dimensions {
   //     refs_len: 4,

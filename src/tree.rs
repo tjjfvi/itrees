@@ -66,6 +66,24 @@ impl OwnedTree {
     };
     unsafe { OwnedTree::from_raw(Box::into_raw(buffer) as *mut _) }
   }
+  pub fn take(kind: usize, tree: &Tree) -> OwnedTree {
+    let len = tree[0].unpack().length();
+    let mut buffer = Box::<[usize]>::new_uninit_slice(1 + len);
+    buffer[0].write(kind);
+    for i in 0..len {
+      buffer[i + 1].write(tree[i].0);
+      match tree[i].unpack() {
+        UnpackedWord::Ref(r) => match r.unpack() {
+          UnpackedRef::Auxiliary(r) => unsafe {
+            *r = UnpackedRef::Auxiliary(&buffer[i + 1] as *const _ as *mut _).pack();
+          },
+          _ => {}
+        },
+        _ => {}
+      }
+    }
+    unsafe { OwnedTree::from_raw(Box::into_raw(buffer) as *mut _) }
+  }
   pub fn drop(self) {
     unsafe {
       drop(Box::<[usize]>::from_raw(
