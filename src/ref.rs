@@ -21,7 +21,7 @@ impl Ref {
 
 #[derive(Debug, Clone, Copy)]
 pub enum UnpackedRef {
-  Principal(RawTree),
+  Principal(RawFullTree),
   Auxiliary(*mut Ref),
 }
 

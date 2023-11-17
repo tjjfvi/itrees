@@ -21,7 +21,7 @@ use std::{
 
 #[derive(Default, Debug)]
 struct Net {
-  active: Vec<(RawTree, RawTree)>,
+  active: Vec<(RawFullTree, RawFullTree)>,
   av: Vec<(usize, OwnedTree)>,
   bv: Vec<(usize, OwnedTree)>,
 }
@@ -49,15 +49,16 @@ impl Net {
   fn erase(&mut self, a: Ref) {
     match a.unpack() {
       UnpackedRef::Auxiliary(a) => unsafe { *a = Ref::NULL },
-      UnpackedRef::Principal(a) => self
-        .active
-        .push((a, OwnedTree::new(unsafe { *a }, &[Word::ERA]).raw)),
+      UnpackedRef::Principal(a) => self.active.push((
+        a,
+        OwnedTree::clone(&mut [unsafe { *a }, Word::ERA.0] as *mut _).raw,
+      )),
     }
   }
 
   pub fn reduce_one(&mut self) -> Option<()> {
     let (a, b) = self.active.pop()?;
-    let (a, b) = unsafe { (OwnedTree::from_raw(a), OwnedTree::from_raw(b)) };
+    let (a, b) = (OwnedTree::from_raw(a), OwnedTree::from_raw(b));
     if a.kind == b.kind {
       self.annihilate(a, b);
     } else {
@@ -70,33 +71,31 @@ impl Net {
   fn commute(&mut self, a: OwnedTree, b: OwnedTree) {
     let mut av = std::mem::take(&mut self.av);
     let mut bv = std::mem::take(&mut self.bv);
-    av.reserve(a.len());
-    bv.reserve(b.len());
     av.extend(
-      a.iter()
-        .enumerate()
+      (0..unsafe { *get_tree(a.raw) }.unpack().length())
+        .map(|i| (i, unsafe { *get_tree(a.raw).offset(i as isize) }))
         .filter(|(_, x)| matches!(x.unpack(), UnpackedWord::Ref(_)))
-        .map(|(i, _)| (i, OwnedTree::new(b.kind, &*b))),
+        .map(|(i, _)| (i, OwnedTree::clone(b.raw))),
     );
     bv.extend(
-      b.iter()
-        .enumerate()
+      (0..unsafe { *get_tree(b.raw) }.unpack().length())
+        .map(|i| (i, unsafe { *get_tree(b.raw).offset(i as isize) }))
         .filter(|(_, x)| matches!(x.unpack(), UnpackedWord::Ref(_)))
-        .map(|(i, _)| (i, OwnedTree::new(a.kind, &*a))),
+        .map(|(i, _)| (i, OwnedTree::clone(a.raw))),
     );
-    for &mut (ai, ref mut bc) in av.iter_mut() {
-      for &mut (bj, ref mut ac) in bv.iter_mut() {
+    for &(ai, ref bc) in av.iter() {
+      for &(bj, ref ac) in bv.iter() {
         self.link(
-          UnpackedRef::Auxiliary(&mut ac[ai] as *mut _ as *mut _).pack(),
-          UnpackedRef::Auxiliary(&mut bc[bj] as *mut _ as *mut _).pack(),
+          UnpackedRef::Auxiliary(unsafe { get_tree(ac.raw).offset(ai as isize) as *mut _ }).pack(),
+          UnpackedRef::Auxiliary(unsafe { get_tree(bc.raw).offset(bj as isize) as *mut _ }).pack(),
         )
       }
     }
     for (ai, b) in av.drain(..) {
-      self.bind(Ref(a[ai].0), b)
+      self.bind(Ref(unsafe { *get_tree(a.raw).offset(ai as isize) }.0), b)
     }
     for (bi, a) in bv.drain(..) {
-      self.bind(Ref(b[bi].0), a)
+      self.bind(Ref(unsafe { *get_tree(b.raw).offset(bi as isize) }.0), a)
     }
     a.drop();
     b.drop();
@@ -108,38 +107,46 @@ impl Net {
   fn annihilate(&mut self, a: OwnedTree, b: OwnedTree) {
     let kind = a.kind;
     {
-      let mut ai = 0;
-      let mut bi = 0;
-      let mut a_era_stack = 0;
-      let mut b_era_stack = 0;
-      while ai < a.len() {
-        match (a[ai].unpack(), b[bi].unpack()) {
+      let mut a = get_tree(a.raw);
+      let mut b = get_tree(b.raw);
+      let mut n = 1usize;
+      let mut a_era_stack = 0usize;
+      let mut b_era_stack = 0usize;
+      while n > 0 {
+        match unsafe { ((*a).unpack(), (*b).unpack()) } {
           (UnpackedWord::Era, UnpackedWord::Era) => {}
           (UnpackedWord::Era, UnpackedWord::Ref(r)) => self.erase(r),
           (UnpackedWord::Ref(r), UnpackedWord::Era) => self.erase(r),
           (UnpackedWord::Ref(a), UnpackedWord::Ref(b)) => self.link(a, b),
-          (UnpackedWord::Era, UnpackedWord::Ctr(_)) => a_era_stack += 2,
-          (UnpackedWord::Ctr(_), UnpackedWord::Era) => b_era_stack += 2,
-          (UnpackedWord::Ctr(_), UnpackedWord::Ctr(_)) => {}
+          (UnpackedWord::Era, UnpackedWord::Ctr(_)) => {
+            n += 2;
+            a_era_stack += 2;
+          }
+          (UnpackedWord::Ctr(_), UnpackedWord::Era) => {
+            n += 2;
+            b_era_stack += 2
+          }
+          (UnpackedWord::Ctr(_), UnpackedWord::Ctr(_)) => n += 2,
           (UnpackedWord::Ref(r), UnpackedWord::Ctr(l)) => {
-            self.bind(r, OwnedTree::take(kind, &b[bi..]));
-            bi += l - 1;
+            self.bind(r, OwnedTree::take(kind, b));
+            b = unsafe { b.offset((l - 1) as isize) };
           }
           (UnpackedWord::Ctr(l), UnpackedWord::Ref(r)) => {
-            self.bind(r, OwnedTree::take(kind, &a[ai..]));
-            ai += l - 1;
+            self.bind(r, OwnedTree::take(kind, a));
+            a = unsafe { a.offset((l - 1) as isize) };
           }
         }
         if a_era_stack != 0 {
-          a_era_stack -= 1;
+          a_era_stack -= 1
         } else {
-          ai += 1;
+          a = unsafe { a.offset(1) }
         }
         if b_era_stack != 0 {
-          b_era_stack -= 1;
+          b_era_stack -= 1
         } else {
-          bi += 1;
+          b = unsafe { b.offset(1) }
         }
+        n -= 1;
       }
     }
     a.drop();

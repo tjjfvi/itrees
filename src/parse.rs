@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::*;
-use logos::{Lexer, Logos};
+use logos::Logos;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
@@ -64,7 +64,7 @@ fn finish_trees(trees: Vec<Word>) -> *mut [Word] {
   Box::into_raw(data)
 }
 
-fn finish_tree(tree: Vec<Word>) -> RawTree {
+fn finish_tree(tree: Vec<Word>) -> RawFullTree {
   let mut data = tree.into_boxed_slice();
   for word in &mut data[1..] {
     *word = finish_word(*word);
