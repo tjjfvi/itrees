@@ -3,22 +3,20 @@ use crate::*;
 fn print_tree(f: &mut std::fmt::Formatter, kind: Option<usize>, tree: Tree) -> std::fmt::Result {
   match tree.root() {
     Node::Era => write!(f, "*"),
-    Node::Ref(r) => match r {
-      Ref::Principal(t) => {
-        if Some(t.kind()) == kind {
-          write!(f, "#")?;
-        }
-        print_tree(f, Some(t.kind()), t.tree())
+    Node::Principal(t) => {
+      if Some(t.kind()) == kind {
+        write!(f, "#")?;
       }
-      Ref::Auxiliary(r) => unsafe {
-        let (a, b) = (r, (*r).0 as *mut PackedRef);
-        let (a, b) = if (b as usize) < a as usize {
-          (b, a)
-        } else {
-          (a, b)
-        };
-        write!(f, "{:?}-{:?}", a, b)
-      },
+      print_tree(f, Some(t.kind()), t.tree())
+    }
+    Node::Auxiliary(r) => unsafe {
+      let (a, b) = (r.0, (*r.0).0 as *mut PackedNode);
+      let (a, b) = if (b as usize) < a as usize {
+        (b, a)
+      } else {
+        (a, b)
+      };
+      write!(f, "{:?}-{:?}", a, b)
     },
     Node::Ctr(_) => {
       match kind {
@@ -48,17 +46,9 @@ impl<'a> Debug for PrintNet<'a> {
       write!(f, "\n")?;
     }
     for &(a, b) in self.1.active.iter().rev() {
-      print_tree(
-        f,
-        None,
-        Tree(&mut Node::Ref(Ref::Principal(a)).pack() as *mut _),
-      )?;
+      print_tree(f, None, Tree(&mut Node::Principal(a).pack() as *mut _))?;
       write!(f, " = ")?;
-      print_tree(
-        f,
-        None,
-        Tree(&mut Node::Ref(Ref::Principal(b)).pack() as *mut _),
-      )?;
+      print_tree(f, None, Tree(&mut Node::Principal(b).pack() as *mut _))?;
       write!(f, "\n")?;
     }
     Ok(())

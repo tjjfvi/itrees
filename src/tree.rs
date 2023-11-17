@@ -1,6 +1,6 @@
 use crate::*;
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Tree(pub *mut PackedNode);
 
 impl Tree {
@@ -33,6 +33,10 @@ impl OwnedTree {
     unsafe { Tree(self.0.offset(1) as *mut PackedNode) }
   }
   #[inline(never)]
+  pub fn era(kind: usize) -> OwnedTree {
+    OwnedTree(Box::into_raw(Box::new([kind, 0])) as *mut _)
+  }
+  #[inline(never)]
   pub fn clone(raw: OwnedTree) -> OwnedTree {
     let kind = raw.kind();
     let tree = raw.tree();
@@ -51,8 +55,8 @@ impl OwnedTree {
       let word = tree.node(i);
       buffer[i + 1].write(word.pack().0);
       match word {
-        Node::Ref(Ref::Auxiliary(r)) => unsafe {
-          *r = Ref::Auxiliary(&buffer[i + 1] as *const _ as *mut _).pack();
+        Node::Auxiliary(r) => unsafe {
+          *r.0 = Node::Auxiliary(Tree(&buffer[i + 1] as *const _ as *mut _)).pack();
         },
         _ => {}
       }

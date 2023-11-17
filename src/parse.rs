@@ -52,8 +52,8 @@ fn finish_trees(trees: Vec<PackedNode>) -> *mut [PackedNode] {
   for word in &mut *data {
     *word = finish_word(*word);
     match word.unpack() {
-      Node::Ref(Ref::Auxiliary(r)) => unsafe {
-        *r = Ref::Auxiliary(word as *mut _ as *mut _).pack();
+      Node::Auxiliary(r) => unsafe {
+        *r.0 = Node::Auxiliary(Tree(word as *mut _)).pack();
       },
       _ => {}
     }
@@ -66,8 +66,8 @@ fn finish_tree(tree: Vec<PackedNode>) -> OwnedTree {
   for word in &mut data[1..] {
     *word = finish_word(*word);
     match word.unpack() {
-      Node::Ref(Ref::Auxiliary(r)) => unsafe {
-        *r = Ref::Auxiliary(word as *mut _ as *mut _).pack();
+      Node::Auxiliary(r) => unsafe {
+        *r.0 = Node::Auxiliary(Tree(word as *mut _)).pack();
       },
       _ => {}
     }
@@ -77,7 +77,7 @@ fn finish_tree(tree: Vec<PackedNode>) -> OwnedTree {
 
 fn finish_word(word: PackedNode) -> PackedNode {
   match word.unpack() {
-    Node::Ref(Ref::Auxiliary(r)) => unsafe { PackedNode((*r).0) },
+    Node::Auxiliary(r) => unsafe { *r.0 },
     _ => word,
   }
 }
@@ -86,26 +86,26 @@ fn parse_tree_into<'a>(
   into_kind: Option<usize>,
   into: &mut Vec<PackedNode>,
   lexer: &mut impl Iterator<Item = Result<Token<'a>, Error>>,
-  scope: &mut HashMap<&'a str, *mut PackedRef>,
-  vars: &mut Vec<*mut (PackedRef, PackedRef)>,
+  scope: &mut HashMap<&'a str, Tree>,
+  vars: &mut Vec<*mut (PackedNode, PackedNode)>,
 ) -> Result<(), Error> {
   let (kind, close) = match lexer.next().ok_or(Error::UnexpectedEOF)?? {
     Token::Ident(n) => {
       into.push(
-        Node::Ref(Ref::Auxiliary(match scope.entry(n) {
+        Node::Auxiliary(match scope.entry(n) {
           std::collections::hash_map::Entry::Occupied(e) => e.remove(),
           std::collections::hash_map::Entry::Vacant(e) => {
-            let mut b = Box::new((PackedRef::NULL, PackedRef::NULL));
+            let mut b = Box::new((PackedNode::ERA, PackedNode::ERA));
             unsafe {
-              b.0 = Ref::Auxiliary(&b.1 as *const _ as *mut _).pack();
-              b.1 = Ref::Auxiliary(&b.0 as *const _ as *mut _).pack();
+              b.0 = Node::Auxiliary(Tree(&b.1 as *const _ as *mut _)).pack();
+              b.1 = Node::Auxiliary(Tree(&b.0 as *const _ as *mut _)).pack();
               let b = Box::into_raw(b);
               vars.push(b);
-              e.insert(&mut (*b).1 as *mut _);
-              &mut (*b).0 as *mut _
+              e.insert(Tree(&mut (*b).1 as *mut _));
+              Tree(&mut (*b).0 as *mut _)
             }
           }
-        }))
+        })
         .pack(),
       );
       return Ok(());
@@ -128,7 +128,7 @@ fn parse_tree_into<'a>(
     parse_tree_into(Some(kind), &mut tree, lexer, scope, vars)?;
     parse_tree_into(Some(kind), &mut tree, lexer, scope, vars)?;
     tree[1] = Node::Ctr(tree.len() - 1).pack();
-    into.push(Node::Ref(Ref::Principal(finish_tree(tree))).pack());
+    into.push(Node::Principal(finish_tree(tree)).pack());
   } else {
     let i = into.len();
     into.push(PackedNode::ERA);
@@ -155,16 +155,10 @@ pub fn parse_program<'a>(
   if matches!(lexer.peek(), Some(Ok(Token::Eq))) {
     lexer.next();
     parse_tree_into(None, &mut trees, &mut lexer, &mut scope, &mut vars)?;
-    match (
+    net.link(
       finish_word(trees.pop().unwrap()).unpack(),
       finish_word(trees.pop().unwrap()).unpack(),
-    ) {
-      (Node::Era, Node::Era) => {}
-      (Node::Ctr(_), _) | (_, Node::Ctr(_)) => unreachable!(),
-      (Node::Era, Node::Ref(r)) => net.erase(r),
-      (Node::Ref(r), Node::Era) => net.erase(r),
-      (Node::Ref(a), Node::Ref(b)) => net.link(b, a),
-    }
+    );
   }
   while lexer.peek().is_some() {
     parse_tree_into(None, &mut trees, &mut lexer, &mut scope, &mut vars)?;
@@ -172,16 +166,10 @@ pub fn parse_program<'a>(
       Err(Error::ExpectedEq)?
     }
     parse_tree_into(None, &mut trees, &mut lexer, &mut scope, &mut vars)?;
-    match (
+    net.link(
       finish_word(trees.pop().unwrap()).unpack(),
       finish_word(trees.pop().unwrap()).unpack(),
-    ) {
-      (Node::Era, Node::Era) => {}
-      (Node::Ctr(_), _) | (_, Node::Ctr(_)) => unreachable!(),
-      (Node::Era, Node::Ref(r)) => net.erase(r),
-      (Node::Ref(r), Node::Era) => net.erase(r),
-      (Node::Ref(a), Node::Ref(b)) => net.link(b, a),
-    }
+    );
   }
   let trees = finish_trees(trees);
   net.active.reverse();

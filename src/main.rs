@@ -3,7 +3,6 @@
 mod node;
 mod parse;
 mod print;
-mod r#ref;
 mod tree;
 mod utils;
 
@@ -11,11 +10,11 @@ use logos::Logos;
 use node::*;
 use parse::*;
 use print::*;
-use r#ref::*;
 use tree::*;
 
 use std::{
   fmt::Debug,
+  hint::unreachable_unchecked,
   time::{Duration, Instant},
 };
 
@@ -28,34 +27,32 @@ struct Net {
 
 impl Net {
   #[inline(always)]
-  fn link(&mut self, a: Ref, b: Ref) {
+  fn link(&mut self, a: Node, b: Node) {
     match (a, b) {
-      (Ref::Principal(a), Ref::Principal(b)) => self.active.push((a, b)),
-      (Ref::Principal(_), Ref::Auxiliary(b)) => unsafe { *b = a.pack() },
-      (Ref::Auxiliary(a), Ref::Principal(_)) => unsafe { *a = b.pack() },
-      (Ref::Auxiliary(aa), Ref::Auxiliary(ba)) => unsafe {
-        *aa = b.pack();
-        *ba = a.pack();
+      (Node::Era, Node::Era) => {}
+      (Node::Era, Node::Auxiliary(r)) | (Node::Auxiliary(r), Node::Era) => unsafe {
+        *r.0 = PackedNode::ERA
       },
+      (Node::Era, Node::Principal(r)) | (Node::Principal(r), Node::Era) => {
+        self.active.push((r, OwnedTree::era(r.kind())))
+      }
+      (Node::Principal(a), Node::Principal(b)) => self.active.push((a, b)),
+      (Node::Principal(_), Node::Auxiliary(b)) => unsafe { *b.0 = a.pack() },
+      (Node::Auxiliary(a), Node::Principal(_)) => unsafe { *a.0 = b.pack() },
+      (Node::Auxiliary(aa), Node::Auxiliary(ba)) => unsafe {
+        *aa.0 = b.pack();
+        *ba.0 = a.pack();
+      },
+      _ => unsafe { unreachable_unchecked() },
     }
   }
 
   #[inline(always)]
-  fn bind(&mut self, a: Ref, b: OwnedTree) {
+  fn bind(&mut self, a: Node, b: OwnedTree) {
     match a {
-      Ref::Principal(a) => self.active.push((a, b)),
-      Ref::Auxiliary(a) => unsafe { *a = Ref::Principal(b).pack() },
-    }
-  }
-
-  #[inline(always)]
-  fn erase(&mut self, a: Ref) {
-    match a {
-      Ref::Auxiliary(a) => unsafe { *a = PackedRef::NULL },
-      Ref::Principal(a) => self.active.push((
-        a,
-        OwnedTree::clone(OwnedTree(&mut [a.kind(), Node::Era.pack().0] as *mut _)),
-      )),
+      Node::Principal(a) => self.active.push((a, b)),
+      Node::Auxiliary(a) => unsafe { *a.0 = Node::Principal(b).pack() },
+      _ => unsafe { unreachable_unchecked() },
     }
   }
 
@@ -76,28 +73,28 @@ impl Net {
     av.extend(
       (0..a.tree().root().length())
         .map(|i| (i, a.tree().node(i)))
-        .filter(|(_, x)| matches!(x, Node::Ref(_)))
+        .filter(|(_, x)| matches!(x, Node::Principal(..) | Node::Auxiliary(..)))
         .map(|(i, _)| (i, OwnedTree::clone(b))),
     );
     bv.extend(
       (0..b.tree().root().length())
         .map(|i| (i, b.tree().node(i)))
-        .filter(|(_, x)| matches!(x, Node::Ref(_)))
+        .filter(|(_, x)| matches!(x, Node::Principal(..) | Node::Auxiliary(..)))
         .map(|(i, _)| (i, OwnedTree::clone(a))),
     );
     for &(ai, ref bc) in av.iter() {
       for &(bj, ref ac) in bv.iter() {
         self.link(
-          Ref::Auxiliary(ac.tree().offset(ai).0 as *mut _),
-          Ref::Auxiliary(bc.tree().offset(bj).0 as *mut _),
+          Node::Auxiliary(ac.tree().offset(ai)),
+          Node::Auxiliary(bc.tree().offset(bj)),
         )
       }
     }
     for (ai, b) in av.drain(..) {
-      self.bind(PackedRef(a.tree().node(ai).pack().0).unpack(), b)
+      self.bind(a.tree().node(ai), b)
     }
     for (bi, a) in bv.drain(..) {
-      self.bind(PackedRef(b.tree().node(bi).pack().0).unpack(), a)
+      self.bind(b.tree().node(bi), a)
     }
     a.drop();
     b.drop();
@@ -116,10 +113,6 @@ impl Net {
       let mut b_era_stack = 0usize;
       while n > 0 {
         match (a.root(), b.root()) {
-          (Node::Era, Node::Era) => {}
-          (Node::Era, Node::Ref(r)) => self.erase(r),
-          (Node::Ref(r), Node::Era) => self.erase(r),
-          (Node::Ref(a), Node::Ref(b)) => self.link(a, b),
           (Node::Era, Node::Ctr(_)) => {
             n += 2;
             a_era_stack += 2;
@@ -129,14 +122,15 @@ impl Net {
             b_era_stack += 2
           }
           (Node::Ctr(_), Node::Ctr(_)) => n += 2,
-          (Node::Ref(r), Node::Ctr(l)) => {
+          (r @ (Node::Principal(..) | Node::Auxiliary(..)), Node::Ctr(l)) => {
             self.bind(r, OwnedTree::take(kind, b));
             b = b.offset(l - 1);
           }
-          (Node::Ctr(l), Node::Ref(r)) => {
+          (Node::Ctr(l), r @ (Node::Principal(..) | Node::Auxiliary(..))) => {
             self.bind(r, OwnedTree::take(kind, a));
             a = a.offset(l - 1);
           }
+          (a, b) => self.link(a, b),
         }
         if a_era_stack != 0 {
           a_era_stack -= 1

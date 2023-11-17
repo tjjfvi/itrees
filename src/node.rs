@@ -10,7 +10,8 @@ delegate_debug!({impl Debug for PackedNode} (self) => self.unpack());
 #[derive(Debug, Clone, Copy)]
 pub enum Node {
   Era,
-  Ref(Ref),
+  Principal(OwnedTree),
+  Auxiliary(Tree),
   Ctr(usize),
 }
 
@@ -23,8 +24,10 @@ impl PackedNode {
       Node::Ctr(self.0)
     } else if self.0 == 0 {
       Node::Era
+    } else if self.0 & 0b10 != 0 {
+      Node::Principal(OwnedTree((self.0 & !0b10) as _))
     } else {
-      Node::Ref(PackedRef(self.0).unpack())
+      Node::Auxiliary(Tree(self.0 as _))
     }
   }
 }
@@ -34,7 +37,8 @@ impl Node {
   pub fn pack(self) -> PackedNode {
     match self {
       Node::Era => PackedNode::ERA,
-      Node::Ref(r) => PackedNode(r.pack().0),
+      Node::Principal(r) => PackedNode(r.0 as usize | 0b10),
+      Node::Auxiliary(r) => PackedNode(r.0 as usize),
       Node::Ctr(len) => PackedNode(len | 1),
     }
   }
