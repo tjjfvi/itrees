@@ -122,11 +122,11 @@ impl Net {
             b_era_stack += 2
           }
           (Node::Ctr(_), Node::Ctr(_)) => n += 2,
-          (r @ (Node::Principal(..) | Node::Auxiliary(..)), Node::Ctr(l)) => {
+          (r, Node::Ctr(l)) => {
             self.bind(r, OwnedTree::take(kind, b));
             b = b.offset(l - 1);
           }
-          (Node::Ctr(l), r @ (Node::Principal(..) | Node::Auxiliary(..))) => {
+          (Node::Ctr(l), r) => {
             self.bind(r, OwnedTree::take(kind, a));
             a = a.offset(l - 1);
           }
