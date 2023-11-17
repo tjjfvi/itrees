@@ -5,15 +5,15 @@ pub struct Tree(pub *mut Word);
 
 impl Tree {
   #[inline(always)]
-  pub fn root(self) -> Word {
-    unsafe { *self.0 }
+  pub fn root(self) -> UnpackedWord {
+    unsafe { *self.0 }.unpack()
   }
   #[inline(always)]
   pub fn offset(self, index: usize) -> Tree {
     unsafe { Tree(self.0.offset(index as isize)) }
   }
   #[inline(always)]
-  pub fn node(self, index: usize) -> Word {
+  pub fn node(self, index: usize) -> UnpackedWord {
     self.offset(index).root()
   }
 }
@@ -36,7 +36,7 @@ impl OwnedTree {
   pub fn clone(raw: OwnedTree) -> OwnedTree {
     let kind = raw.kind();
     let tree = raw.tree();
-    let len = tree.root().unpack().length();
+    let len = tree.root().length();
     let mut buffer = Box::<[Word]>::new_uninit_slice(1 + len);
     buffer[0].write(Word(kind));
     unsafe { std::ptr::copy_nonoverlapping(tree.0, &mut buffer[1] as *mut _ as *mut _, len) };
@@ -44,13 +44,13 @@ impl OwnedTree {
   }
   #[inline(never)]
   pub fn take(kind: usize, tree: Tree) -> OwnedTree {
-    let len = tree.root().unpack().length();
+    let len = tree.root().length();
     let mut buffer = Box::<[Word]>::new_uninit_slice(1 + len);
     buffer[0].write(Word(kind));
     for i in 0..len {
       let word = tree.node(i);
-      buffer[i + 1].write(word);
-      match word.unpack() {
+      buffer[i + 1].write(word.pack());
+      match word {
         UnpackedWord::Ref(r) => match r.unpack() {
           UnpackedRef::Auxiliary(r) => unsafe {
             *r = UnpackedRef::Auxiliary(&buffer[i + 1] as *const _ as *mut _).pack();
@@ -65,7 +65,7 @@ impl OwnedTree {
   pub fn drop(self) {
     unsafe {
       drop(Box::<[usize]>::from_raw(
-        std::ptr::slice_from_raw_parts_mut(self.0, 1 + self.tree().root().unpack().length()),
+        std::ptr::slice_from_raw_parts_mut(self.0, 1 + self.tree().root().length()),
       ));
     }
   }

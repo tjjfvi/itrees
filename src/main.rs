@@ -71,15 +71,15 @@ impl Net {
     let mut av = std::mem::take(&mut self.av);
     let mut bv = std::mem::take(&mut self.bv);
     av.extend(
-      (0..a.tree().root().unpack().length())
+      (0..a.tree().root().length())
         .map(|i| (i, a.tree().node(i)))
-        .filter(|(_, x)| matches!(x.unpack(), UnpackedWord::Ref(_)))
+        .filter(|(_, x)| matches!(x, UnpackedWord::Ref(_)))
         .map(|(i, _)| (i, OwnedTree::clone(b))),
     );
     bv.extend(
-      (0..b.tree().root().unpack().length())
+      (0..b.tree().root().length())
         .map(|i| (i, b.tree().node(i)))
-        .filter(|(_, x)| matches!(x.unpack(), UnpackedWord::Ref(_)))
+        .filter(|(_, x)| matches!(x, UnpackedWord::Ref(_)))
         .map(|(i, _)| (i, OwnedTree::clone(a))),
     );
     for &(ai, ref bc) in av.iter() {
@@ -91,10 +91,10 @@ impl Net {
       }
     }
     for (ai, b) in av.drain(..) {
-      self.bind(Ref(a.tree().node(ai).0), b)
+      self.bind(Ref(a.tree().node(ai).pack().0), b)
     }
     for (bi, a) in bv.drain(..) {
-      self.bind(Ref(b.tree().node(bi).0), a)
+      self.bind(Ref(b.tree().node(bi).pack().0), a)
     }
     a.drop();
     b.drop();
@@ -112,7 +112,7 @@ impl Net {
       let mut a_era_stack = 0usize;
       let mut b_era_stack = 0usize;
       while n > 0 {
-        match (a.root().unpack(), b.root().unpack()) {
+        match (a.root(), b.root()) {
           (UnpackedWord::Era, UnpackedWord::Era) => {}
           (UnpackedWord::Era, UnpackedWord::Ref(r)) => self.erase(r),
           (UnpackedWord::Ref(r), UnpackedWord::Era) => self.erase(r),
