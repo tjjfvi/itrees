@@ -12,7 +12,7 @@ impl Ref {
   #[inline(always)]
   pub fn unpack(self) -> UnpackedRef {
     if self.0 & 0b10 != 0 {
-      UnpackedRef::Principal((self.0 & !0b10) as _)
+      UnpackedRef::Principal(OwnedTree((self.0 & !0b10) as _))
     } else {
       UnpackedRef::Auxiliary(self.0 as _)
     }
@@ -21,7 +21,7 @@ impl Ref {
 
 #[derive(Debug, Clone, Copy)]
 pub enum UnpackedRef {
-  Principal(RawFullTree),
+  Principal(OwnedTree),
   Auxiliary(*mut Ref),
 }
 
@@ -30,7 +30,7 @@ impl UnpackedRef {
   pub fn pack(self) -> Ref {
     match self {
       UnpackedRef::Principal(p) => {
-        let p = p as usize;
+        let p = p.0 as usize;
         debug_assert!(p & 0b10 == 0);
         Ref(p | 0b10)
       }

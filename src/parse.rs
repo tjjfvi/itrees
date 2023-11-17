@@ -64,7 +64,7 @@ fn finish_trees(trees: Vec<Word>) -> *mut [Word] {
   Box::into_raw(data)
 }
 
-fn finish_tree(tree: Vec<Word>) -> RawFullTree {
+fn finish_tree(tree: Vec<Word>) -> OwnedTree {
   let mut data = tree.into_boxed_slice();
   for word in &mut data[1..] {
     *word = finish_word(*word);
@@ -78,7 +78,7 @@ fn finish_tree(tree: Vec<Word>) -> RawFullTree {
       _ => {}
     }
   }
-  Box::into_raw(data) as *mut _
+  OwnedTree(Box::into_raw(data) as *mut _)
 }
 
 fn finish_word(word: Word) -> Word {
