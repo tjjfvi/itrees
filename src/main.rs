@@ -1,18 +1,18 @@
 #![feature(new_uninit)]
 
+mod node;
 mod parse;
 mod print;
 mod r#ref;
 mod tree;
 mod utils;
-mod word;
 
 use logos::Logos;
+use node::*;
 use parse::*;
 use print::*;
 use r#ref::*;
 use tree::*;
-use word::*;
 
 use std::{
   fmt::Debug,
@@ -27,31 +27,34 @@ struct Net {
 }
 
 impl Net {
+  #[inline(always)]
   fn link(&mut self, a: Ref, b: Ref) {
-    match (a.unpack(), b.unpack()) {
-      (UnpackedRef::Principal(a), UnpackedRef::Principal(b)) => self.active.push((a, b)),
-      (UnpackedRef::Principal(_), UnpackedRef::Auxiliary(b)) => unsafe { *b = a },
-      (UnpackedRef::Auxiliary(a), UnpackedRef::Principal(_)) => unsafe { *a = b },
-      (UnpackedRef::Auxiliary(aa), UnpackedRef::Auxiliary(ba)) => unsafe {
-        *aa = b;
-        *ba = a;
+    match (a, b) {
+      (Ref::Principal(a), Ref::Principal(b)) => self.active.push((a, b)),
+      (Ref::Principal(_), Ref::Auxiliary(b)) => unsafe { *b = a.pack() },
+      (Ref::Auxiliary(a), Ref::Principal(_)) => unsafe { *a = b.pack() },
+      (Ref::Auxiliary(aa), Ref::Auxiliary(ba)) => unsafe {
+        *aa = b.pack();
+        *ba = a.pack();
       },
     }
   }
 
+  #[inline(always)]
   fn bind(&mut self, a: Ref, b: OwnedTree) {
-    match a.unpack() {
-      UnpackedRef::Principal(a) => self.active.push((a, b)),
-      UnpackedRef::Auxiliary(a) => unsafe { *a = UnpackedRef::Principal(b).pack() },
+    match a {
+      Ref::Principal(a) => self.active.push((a, b)),
+      Ref::Auxiliary(a) => unsafe { *a = Ref::Principal(b).pack() },
     }
   }
 
+  #[inline(always)]
   fn erase(&mut self, a: Ref) {
-    match a.unpack() {
-      UnpackedRef::Auxiliary(a) => unsafe { *a = Ref::NULL },
-      UnpackedRef::Principal(a) => self.active.push((
+    match a {
+      Ref::Auxiliary(a) => unsafe { *a = PackedRef::NULL },
+      Ref::Principal(a) => self.active.push((
         a,
-        OwnedTree::clone(OwnedTree(&mut [a.kind(), Word::ERA.0] as *mut _)),
+        OwnedTree::clone(OwnedTree(&mut [a.kind(), Node::Era.pack().0] as *mut _)),
       )),
     }
   }
@@ -73,28 +76,28 @@ impl Net {
     av.extend(
       (0..a.tree().root().length())
         .map(|i| (i, a.tree().node(i)))
-        .filter(|(_, x)| matches!(x, UnpackedWord::Ref(_)))
+        .filter(|(_, x)| matches!(x, Node::Ref(_)))
         .map(|(i, _)| (i, OwnedTree::clone(b))),
     );
     bv.extend(
       (0..b.tree().root().length())
         .map(|i| (i, b.tree().node(i)))
-        .filter(|(_, x)| matches!(x, UnpackedWord::Ref(_)))
+        .filter(|(_, x)| matches!(x, Node::Ref(_)))
         .map(|(i, _)| (i, OwnedTree::clone(a))),
     );
     for &(ai, ref bc) in av.iter() {
       for &(bj, ref ac) in bv.iter() {
         self.link(
-          UnpackedRef::Auxiliary(ac.tree().offset(ai).0 as *mut _).pack(),
-          UnpackedRef::Auxiliary(bc.tree().offset(bj).0 as *mut _).pack(),
+          Ref::Auxiliary(ac.tree().offset(ai).0 as *mut _),
+          Ref::Auxiliary(bc.tree().offset(bj).0 as *mut _),
         )
       }
     }
     for (ai, b) in av.drain(..) {
-      self.bind(Ref(a.tree().node(ai).pack().0), b)
+      self.bind(PackedRef(a.tree().node(ai).pack().0).unpack(), b)
     }
     for (bi, a) in bv.drain(..) {
-      self.bind(Ref(b.tree().node(bi).pack().0), a)
+      self.bind(PackedRef(b.tree().node(bi).pack().0).unpack(), a)
     }
     a.drop();
     b.drop();
@@ -113,24 +116,24 @@ impl Net {
       let mut b_era_stack = 0usize;
       while n > 0 {
         match (a.root(), b.root()) {
-          (UnpackedWord::Era, UnpackedWord::Era) => {}
-          (UnpackedWord::Era, UnpackedWord::Ref(r)) => self.erase(r),
-          (UnpackedWord::Ref(r), UnpackedWord::Era) => self.erase(r),
-          (UnpackedWord::Ref(a), UnpackedWord::Ref(b)) => self.link(a, b),
-          (UnpackedWord::Era, UnpackedWord::Ctr(_)) => {
+          (Node::Era, Node::Era) => {}
+          (Node::Era, Node::Ref(r)) => self.erase(r),
+          (Node::Ref(r), Node::Era) => self.erase(r),
+          (Node::Ref(a), Node::Ref(b)) => self.link(a, b),
+          (Node::Era, Node::Ctr(_)) => {
             n += 2;
             a_era_stack += 2;
           }
-          (UnpackedWord::Ctr(_), UnpackedWord::Era) => {
+          (Node::Ctr(_), Node::Era) => {
             n += 2;
             b_era_stack += 2
           }
-          (UnpackedWord::Ctr(_), UnpackedWord::Ctr(_)) => n += 2,
-          (UnpackedWord::Ref(r), UnpackedWord::Ctr(l)) => {
+          (Node::Ctr(_), Node::Ctr(_)) => n += 2,
+          (Node::Ref(r), Node::Ctr(l)) => {
             self.bind(r, OwnedTree::take(kind, b));
             b = b.offset(l - 1);
           }
-          (UnpackedWord::Ctr(l), UnpackedWord::Ref(r)) => {
+          (Node::Ctr(l), Node::Ref(r)) => {
             self.bind(r, OwnedTree::take(kind, a));
             a = a.offset(l - 1);
           }

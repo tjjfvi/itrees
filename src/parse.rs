@@ -47,16 +47,13 @@ pub enum Token<'a> {
   Ident(&'a str),
 }
 
-fn finish_trees(trees: Vec<Word>) -> *mut [Word] {
+fn finish_trees(trees: Vec<PackedNode>) -> *mut [PackedNode] {
   let mut data = trees.into_boxed_slice();
   for word in &mut *data {
     *word = finish_word(*word);
     match word.unpack() {
-      UnpackedWord::Ref(r) => match r.unpack() {
-        UnpackedRef::Auxiliary(r) => unsafe {
-          *r = UnpackedRef::Auxiliary(word as *mut _ as *mut _).pack();
-        },
-        _ => {}
+      Node::Ref(Ref::Auxiliary(r)) => unsafe {
+        *r = Ref::Auxiliary(word as *mut _ as *mut _).pack();
       },
       _ => {}
     }
@@ -64,16 +61,13 @@ fn finish_trees(trees: Vec<Word>) -> *mut [Word] {
   Box::into_raw(data)
 }
 
-fn finish_tree(tree: Vec<Word>) -> OwnedTree {
+fn finish_tree(tree: Vec<PackedNode>) -> OwnedTree {
   let mut data = tree.into_boxed_slice();
   for word in &mut data[1..] {
     *word = finish_word(*word);
     match word.unpack() {
-      UnpackedWord::Ref(r) => match r.unpack() {
-        UnpackedRef::Auxiliary(r) => unsafe {
-          *r = UnpackedRef::Auxiliary(word as *mut _ as *mut _).pack();
-        },
-        _ => {}
+      Node::Ref(Ref::Auxiliary(r)) => unsafe {
+        *r = Ref::Auxiliary(word as *mut _ as *mut _).pack();
       },
       _ => {}
     }
@@ -81,49 +75,43 @@ fn finish_tree(tree: Vec<Word>) -> OwnedTree {
   OwnedTree(Box::into_raw(data) as *mut _)
 }
 
-fn finish_word(word: Word) -> Word {
+fn finish_word(word: PackedNode) -> PackedNode {
   match word.unpack() {
-    UnpackedWord::Ref(r) => match r.unpack() {
-      UnpackedRef::Auxiliary(r) => unsafe { Word((*r).0) },
-      _ => word,
-    },
+    Node::Ref(Ref::Auxiliary(r)) => unsafe { PackedNode((*r).0) },
     _ => word,
   }
 }
 
 fn parse_tree_into<'a>(
   into_kind: Option<usize>,
-  into: &mut Vec<Word>,
+  into: &mut Vec<PackedNode>,
   lexer: &mut impl Iterator<Item = Result<Token<'a>, Error>>,
-  scope: &mut HashMap<&'a str, *mut Ref>,
-  vars: &mut Vec<*mut (Ref, Ref)>,
+  scope: &mut HashMap<&'a str, *mut PackedRef>,
+  vars: &mut Vec<*mut (PackedRef, PackedRef)>,
 ) -> Result<(), Error> {
   let (kind, close) = match lexer.next().ok_or(Error::UnexpectedEOF)?? {
     Token::Ident(n) => {
       into.push(
-        UnpackedWord::Ref(
-          UnpackedRef::Auxiliary(match scope.entry(n) {
-            std::collections::hash_map::Entry::Occupied(e) => e.remove(),
-            std::collections::hash_map::Entry::Vacant(e) => {
-              let mut b = Box::new((Ref::NULL, Ref::NULL));
-              unsafe {
-                b.0 = UnpackedRef::Auxiliary(&b.1 as *const _ as *mut _).pack();
-                b.1 = UnpackedRef::Auxiliary(&b.0 as *const _ as *mut _).pack();
-                let b = Box::into_raw(b);
-                vars.push(b);
-                e.insert(&mut (*b).1 as *mut _);
-                &mut (*b).0 as *mut _
-              }
+        Node::Ref(Ref::Auxiliary(match scope.entry(n) {
+          std::collections::hash_map::Entry::Occupied(e) => e.remove(),
+          std::collections::hash_map::Entry::Vacant(e) => {
+            let mut b = Box::new((PackedRef::NULL, PackedRef::NULL));
+            unsafe {
+              b.0 = Ref::Auxiliary(&b.1 as *const _ as *mut _).pack();
+              b.1 = Ref::Auxiliary(&b.0 as *const _ as *mut _).pack();
+              let b = Box::into_raw(b);
+              vars.push(b);
+              e.insert(&mut (*b).1 as *mut _);
+              &mut (*b).0 as *mut _
             }
-          })
-          .pack(),
-        )
+          }
+        }))
         .pack(),
       );
       return Ok(());
     }
     Token::Era => {
-      into.push(Word::ERA);
+      into.push(PackedNode::ERA);
       return Ok(());
     }
     Token::OpenParen => (0, Token::CloseParen),
@@ -135,18 +123,18 @@ fn parse_tree_into<'a>(
     _ => Err(Error::ExpectedTree)?,
   };
   if Some(kind) != into_kind {
-    let mut tree = vec![Word(kind)];
-    tree.push(Word::ERA);
+    let mut tree = vec![PackedNode(kind)];
+    tree.push(PackedNode::ERA);
     parse_tree_into(Some(kind), &mut tree, lexer, scope, vars)?;
     parse_tree_into(Some(kind), &mut tree, lexer, scope, vars)?;
-    tree[1] = UnpackedWord::Ctr(tree.len() - 1).pack();
-    into.push(UnpackedWord::Ref(UnpackedRef::Principal(finish_tree(tree)).pack()).pack());
+    tree[1] = Node::Ctr(tree.len() - 1).pack();
+    into.push(Node::Ref(Ref::Principal(finish_tree(tree))).pack());
   } else {
     let i = into.len();
-    into.push(Word::ERA);
+    into.push(PackedNode::ERA);
     parse_tree_into(into_kind, into, lexer, scope, vars)?;
     parse_tree_into(into_kind, into, lexer, scope, vars)?;
-    into[i] = UnpackedWord::Ctr(into.len() - i).pack();
+    into[i] = Node::Ctr(into.len() - i).pack();
   }
   if lexer.next().ok_or(Error::UnexpectedEOF)?? != close {
     Err(Error::InvalidClose)?
@@ -156,7 +144,7 @@ fn parse_tree_into<'a>(
 
 pub fn parse_program<'a>(
   lexer: &mut impl Iterator<Item = Result<Token<'a>, Error>>,
-) -> Result<(*mut [Word], Net), Error> {
+) -> Result<(*mut [PackedNode], Net), Error> {
   let mut lexer = lexer.peekable();
   let mut trees = vec![];
   let mut net = Net::default();
@@ -171,11 +159,11 @@ pub fn parse_program<'a>(
       finish_word(trees.pop().unwrap()).unpack(),
       finish_word(trees.pop().unwrap()).unpack(),
     ) {
-      (UnpackedWord::Era, UnpackedWord::Era) => {}
-      (UnpackedWord::Ctr(_), _) | (_, UnpackedWord::Ctr(_)) => unreachable!(),
-      (UnpackedWord::Era, UnpackedWord::Ref(r)) => net.erase(r),
-      (UnpackedWord::Ref(r), UnpackedWord::Era) => net.erase(r),
-      (UnpackedWord::Ref(a), UnpackedWord::Ref(b)) => net.link(b, a),
+      (Node::Era, Node::Era) => {}
+      (Node::Ctr(_), _) | (_, Node::Ctr(_)) => unreachable!(),
+      (Node::Era, Node::Ref(r)) => net.erase(r),
+      (Node::Ref(r), Node::Era) => net.erase(r),
+      (Node::Ref(a), Node::Ref(b)) => net.link(b, a),
     }
   }
   while lexer.peek().is_some() {
@@ -188,11 +176,11 @@ pub fn parse_program<'a>(
       finish_word(trees.pop().unwrap()).unpack(),
       finish_word(trees.pop().unwrap()).unpack(),
     ) {
-      (UnpackedWord::Era, UnpackedWord::Era) => {}
-      (UnpackedWord::Ctr(_), _) | (_, UnpackedWord::Ctr(_)) => unreachable!(),
-      (UnpackedWord::Era, UnpackedWord::Ref(r)) => net.erase(r),
-      (UnpackedWord::Ref(r), UnpackedWord::Era) => net.erase(r),
-      (UnpackedWord::Ref(a), UnpackedWord::Ref(b)) => net.link(b, a),
+      (Node::Era, Node::Era) => {}
+      (Node::Ctr(_), _) | (_, Node::Ctr(_)) => unreachable!(),
+      (Node::Era, Node::Ref(r)) => net.erase(r),
+      (Node::Ref(r), Node::Era) => net.erase(r),
+      (Node::Ref(a), Node::Ref(b)) => net.link(b, a),
     }
   }
   let trees = finish_trees(trees);

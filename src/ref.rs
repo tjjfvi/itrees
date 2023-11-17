@@ -3,41 +3,41 @@ use bytemuck::{Pod, Zeroable};
 
 #[derive(Clone, Copy, Zeroable, Pod)]
 #[repr(transparent)]
-pub struct Ref(pub usize);
+pub struct PackedRef(pub usize);
 
-delegate_debug!({impl Debug for Ref} (self) => self.unpack());
+delegate_debug!({impl Debug for PackedRef} (self) => self.unpack());
 
-impl Ref {
-  pub const NULL: Ref = Ref(0);
+impl PackedRef {
+  pub const NULL: PackedRef = PackedRef(0);
   #[inline(always)]
-  pub fn unpack(self) -> UnpackedRef {
+  pub fn unpack(self) -> Ref {
     if self.0 & 0b10 != 0 {
-      UnpackedRef::Principal(OwnedTree((self.0 & !0b10) as _))
+      Ref::Principal(OwnedTree((self.0 & !0b10) as _))
     } else {
-      UnpackedRef::Auxiliary(self.0 as _)
+      Ref::Auxiliary(self.0 as _)
     }
   }
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum UnpackedRef {
+pub enum Ref {
   Principal(OwnedTree),
-  Auxiliary(*mut Ref),
+  Auxiliary(*mut PackedRef),
 }
 
-impl UnpackedRef {
+impl Ref {
   #[inline(always)]
-  pub fn pack(self) -> Ref {
+  pub fn pack(self) -> PackedRef {
     match self {
-      UnpackedRef::Principal(p) => {
+      Ref::Principal(p) => {
         let p = p.0 as usize;
         debug_assert!(p & 0b10 == 0);
-        Ref(p | 0b10)
+        PackedRef(p | 0b10)
       }
-      UnpackedRef::Auxiliary(p) => {
+      Ref::Auxiliary(p) => {
         let p = p as usize;
         debug_assert!(p & 0b10 == 0);
-        Ref(p)
+        PackedRef(p)
       }
     }
   }

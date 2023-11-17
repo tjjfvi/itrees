@@ -1,11 +1,11 @@
 use crate::*;
 
 #[derive(Clone, Copy)]
-pub struct Tree(pub *mut Word);
+pub struct Tree(pub *mut PackedNode);
 
 impl Tree {
   #[inline(always)]
-  pub fn root(self) -> UnpackedWord {
+  pub fn root(self) -> Node {
     unsafe { *self.0 }.unpack()
   }
   #[inline(always)]
@@ -13,7 +13,7 @@ impl Tree {
     unsafe { Tree(self.0.offset(index as isize)) }
   }
   #[inline(always)]
-  pub fn node(self, index: usize) -> UnpackedWord {
+  pub fn node(self, index: usize) -> Node {
     self.offset(index).root()
   }
 }
@@ -30,32 +30,29 @@ impl OwnedTree {
   }
   #[inline(always)]
   pub fn tree(self) -> Tree {
-    unsafe { Tree(self.0.offset(1) as *mut Word) }
+    unsafe { Tree(self.0.offset(1) as *mut PackedNode) }
   }
   #[inline(never)]
   pub fn clone(raw: OwnedTree) -> OwnedTree {
     let kind = raw.kind();
     let tree = raw.tree();
     let len = tree.root().length();
-    let mut buffer = Box::<[Word]>::new_uninit_slice(1 + len);
-    buffer[0].write(Word(kind));
+    let mut buffer = Box::<[usize]>::new_uninit_slice(1 + len);
+    buffer[0].write(kind);
     unsafe { std::ptr::copy_nonoverlapping(tree.0, &mut buffer[1] as *mut _ as *mut _, len) };
     OwnedTree(Box::into_raw(buffer) as *mut _)
   }
   #[inline(never)]
   pub fn take(kind: usize, tree: Tree) -> OwnedTree {
     let len = tree.root().length();
-    let mut buffer = Box::<[Word]>::new_uninit_slice(1 + len);
-    buffer[0].write(Word(kind));
+    let mut buffer = Box::<[usize]>::new_uninit_slice(1 + len);
+    buffer[0].write(kind);
     for i in 0..len {
       let word = tree.node(i);
-      buffer[i + 1].write(word.pack());
+      buffer[i + 1].write(word.pack().0);
       match word {
-        UnpackedWord::Ref(r) => match r.unpack() {
-          UnpackedRef::Auxiliary(r) => unsafe {
-            *r = UnpackedRef::Auxiliary(&buffer[i + 1] as *const _ as *mut _).pack();
-          },
-          _ => {}
+        Node::Ref(Ref::Auxiliary(r)) => unsafe {
+          *r = Ref::Auxiliary(&buffer[i + 1] as *const _ as *mut _).pack();
         },
         _ => {}
       }

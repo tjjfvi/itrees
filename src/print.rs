@@ -2,16 +2,16 @@ use crate::*;
 
 fn print_tree(f: &mut std::fmt::Formatter, kind: Option<usize>, tree: Tree) -> std::fmt::Result {
   match tree.root() {
-    UnpackedWord::Era => write!(f, "*"),
-    UnpackedWord::Ref(r) => match r.unpack() {
-      UnpackedRef::Principal(t) => {
+    Node::Era => write!(f, "*"),
+    Node::Ref(r) => match r {
+      Ref::Principal(t) => {
         if Some(t.kind()) == kind {
           write!(f, "#")?;
         }
         print_tree(f, Some(t.kind()), t.tree())
       }
-      UnpackedRef::Auxiliary(r) => unsafe {
-        let (a, b) = (r, (*r).0 as *mut Ref);
+      Ref::Auxiliary(r) => unsafe {
+        let (a, b) = (r, (*r).0 as *mut PackedRef);
         let (a, b) = if (b as usize) < a as usize {
           (b, a)
         } else {
@@ -20,7 +20,7 @@ fn print_tree(f: &mut std::fmt::Formatter, kind: Option<usize>, tree: Tree) -> s
         write!(f, "{:?}-{:?}", a, b)
       },
     },
-    UnpackedWord::Ctr(_) => {
+    Node::Ctr(_) => {
       match kind {
         Some(0) => write!(f, "(")?,
         Some(1) => write!(f, "[")?,
@@ -39,7 +39,7 @@ fn print_tree(f: &mut std::fmt::Formatter, kind: Option<usize>, tree: Tree) -> s
   }
 }
 
-pub struct PrintNet<'a>(pub &'a [Word], pub &'a Net);
+pub struct PrintNet<'a>(pub &'a [PackedNode], pub &'a Net);
 
 impl<'a> Debug for PrintNet<'a> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -51,13 +51,13 @@ impl<'a> Debug for PrintNet<'a> {
       print_tree(
         f,
         None,
-        Tree(&mut UnpackedWord::Ref(UnpackedRef::Principal(a).pack()).pack() as *mut _),
+        Tree(&mut Node::Ref(Ref::Principal(a)).pack() as *mut _),
       )?;
       write!(f, " = ")?;
       print_tree(
         f,
         None,
-        Tree(&mut UnpackedWord::Ref(UnpackedRef::Principal(b).pack()).pack() as *mut _),
+        Tree(&mut Node::Ref(Ref::Principal(b)).pack() as *mut _),
       )?;
       write!(f, "\n")?;
     }
