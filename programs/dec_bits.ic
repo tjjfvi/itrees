@@ -1,0 +1,56 @@
+out
+
+c12 = ([[[[[[[[[[[(l k) (k j)] (j i)] (i h)] (h g)] (g f)] (f e)] (e d)] (d c)] (c b)] (b a)] (a R)] (l R))
+
+O = (xs ((xs r) (* (* r))))
+I = (xs (* ((xs r) (* r))))
+E = (* (* (e e)))
+
+[[O1 O2] [O3 O4]] = O
+[[E1 E2] [E3 E4]] = E
+[[I1 I2] [I3 I4]] = I
+
+lowO = (p oop)
+O1 = (p op)
+O2 = (op oop)
+lowI = (p oip)
+I1 = (p ip)
+O3 = (ip oip)
+low  = ((lowO (lowI (E4 R))) R)
+
+decO = (p (di idecp))
+rec3 = (di dec)
+I3 = (decp idecp)
+dec = (p decp)
+
+decI = (p (* lowp))
+low = (p lowp)
+fix2  = ( (di ((decO (decI ((* E2) (di R)))) R)) dec )
+
+{3 dec1 dec2} = dec
+
+runO = (p (ri R))
+rec1 = (ri run)
+run = (decop R)
+dec1 = (op decop)
+O4 = (p op)
+
+runI = (p (ri R))
+rec2 = (ri run)
+run = (decip R)
+dec2 = (ip decip)
+I2 = (p ip)
+
+fix3 = ( (ri ((runO (runI ((* E1) (ri R)))) R) ) run)
+
+rec = ( ([d (f (f1 ((d f1) fo) ))] f) fo )
+split = ( ([[d1 d2] (f (f1 f2))] f) ((d1 f1) (d2 f2)) )
+
+fix2 = ({2 f ((({2 x y} (x y)) f) o)} o)
+fix3 = ({3 f ((({3 x y} (x y)) f) o)} o)
+
+{2 {2 rec1 rec2} rec3} = rec
+* = split
+
+c12 = (I4 (E3 nie))
+run = (nie out)

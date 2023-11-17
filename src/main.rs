@@ -148,18 +148,10 @@ impl Net {
 }
 
 fn main() {
-  let program = "
-out
-
-c20a = ([[[[[[[[[[[[[[[[[[[(t s) (s r)] (r q)] (q p)] (p o)] (o n)] (n m)] (m l)] (l k)] (k j)] (j i)] (i h)] (h g)] (g f)] (f e)] (e d)] (d c)] (c b)] (b a)] (a R)] (t R))
-
-c20b = ({2 {2 {2 {2 {2 {2 {2 {2 {2 {2 {2 {2 {2 {2 {2 {2 {2 {2 {2 (t s) (s r)} (r q)} (q p)} (p o)} (o n)} (n m)} (m l)} (l k)} (k j)} (j i)} (i h)} (h g)} (g f)} (f e)} (e d)} (d c)} (c b)} (b a)} (a R)} (t R))
-
-c20a = (c20b out)
-";
+  let program = include_str!("../programs/dec_bits_comp.ic");
 
   let mut d = Duration::ZERO;
-  let n = 100000;
+  let n = 100;
 
   let mut a = &mut [] as *mut _;
   let mut b = Net::default();
@@ -177,7 +169,7 @@ c20a = (c20b out)
 
     d += start.elapsed();
 
-    // println!("{} steps ({:?})\n", n, start.elapsed());
+    println!("{} steps ({:?})\n", n, start.elapsed());
   }
 
   unsafe {
@@ -185,50 +177,6 @@ c20a = (c20b out)
   }
 
   dbg!(d / n);
-
-  // let data = &[
-  //   UnpackedWord::Ctr(Dimensions {
-  //     refs_len: 4,
-  //     form_len: 9,
-  //   })
-  //   .pack(),
-  //   UnpackedWord::Ctr(Dimensions {
-  //     refs_len: 3,
-  //     form_len: 5,
-  //   })
-  //   .pack(),
-  //   Word::REF,
-  //   UnpackedWord::Ctr(Dimensions {
-  //     refs_len: 2,
-  //     form_len: 3,
-  //   })
-  //   .pack(),
-  //   Word::REF,
-  //   Word::REF,
-  //   UnpackedWord::Ctr(Dimensions {
-  //     refs_len: 1,
-  //     form_len: 3,
-  //   })
-  //   .pack(),
-  //   Word::ERA,
-  //   Word::REF,
-  // ];
-  // let a = Tree::from_form(0, data);
-  // let b = Tree::from_form(1, data);
-  // Net::default().annihilate(a, b);
-  // // // println!(
-  // // //   "{:#?}",
-  // // //   TreeRef {
-  // // //     kind: 0,
-  // // //     data,
-  // // //     refs: &[
-  // // //       UnpackedRef(0, std::ptr::null_mut()).pack(),
-  // // //       UnpackedRef(1, std::ptr::null_mut()).pack(),
-  // // //       UnpackedRef(2, std::ptr::null_mut()).pack(),
-  // // //       UnpackedRef(3, std::ptr::null_mut()).pack(),
-  // // //     ]
-  // // //   }
-  // // // );
 }
 
 #[inline(never)]
