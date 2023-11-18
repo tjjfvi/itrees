@@ -142,10 +142,8 @@ fn parse_tree_into<'a>(
   Ok(())
 }
 
-pub fn parse_program<'a>(
-  lexer: &mut impl Iterator<Item = Result<Token<'a>, Error>>,
-) -> Result<(*mut [PackedNode], Net), Error> {
-  let mut lexer = lexer.peekable();
+pub fn parse_program<'a>(source: &'a str) -> Result<(*mut [PackedNode], Net), Error> {
+  let mut lexer = Token::lexer(source).peekable();
   let mut trees = vec![];
   let mut net = Net::default();
   let (mut scope, mut vars) = Default::default();
