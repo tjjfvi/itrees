@@ -1,4 +1,5 @@
 use crate::*;
+use std::mem::size_of;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Tree(pub *mut PackedNode);
@@ -15,6 +16,11 @@ impl Tree {
   #[inline(always)]
   pub fn node(self, index: usize) -> Node {
     self.offset(index).root()
+  }
+  #[inline(always)]
+  pub fn contains(self, tree: Tree) -> bool {
+    (self.0 as usize..self.0 as usize + self.root().length() * size_of::<usize>())
+      .contains(&(tree.0 as usize))
   }
 }
 

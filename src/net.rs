@@ -1,13 +1,13 @@
 use crate::*;
-use std::hint::unreachable_unchecked;
+use std::{hint::unreachable_unchecked, mem::size_of};
 
 #[derive(Default, Debug)]
 pub struct Net {
   pub active: Vec<(OwnedTree, OwnedTree)>,
   pub a: usize,
   pub c: usize,
-  pub av: Vec<(usize, OwnedTree)>,
-  pub bv: Vec<(usize, OwnedTree)>,
+  pub av: Vec<(usize, Result<OwnedTree, usize>)>,
+  pub bv: Vec<(usize, Result<OwnedTree, usize>)>,
 }
 
 impl Net {
@@ -68,31 +68,59 @@ impl Net {
     self.c += 1;
     let mut av = std::mem::take(&mut self.av);
     let mut bv = std::mem::take(&mut self.bv);
-    av.extend(
-      (0..a.tree().root().length())
-        .map(|i| (i, a.tree().node(i)))
-        .filter(|(_, x)| matches!(x, Node::Principal(..) | Node::Auxiliary(..)))
-        .map(|(i, _)| (i, OwnedTree::clone(b))),
-    );
-    bv.extend(
-      (0..b.tree().root().length())
-        .map(|i| (i, b.tree().node(i)))
-        .filter(|(_, x)| matches!(x, Node::Principal(..) | Node::Auxiliary(..)))
-        .map(|(i, _)| (i, OwnedTree::clone(a))),
-    );
-    for &(ai, ref bc) in av.iter() {
-      for &(bj, ref ac) in bv.iter() {
-        self.link(
-          Node::Auxiliary(ac.tree().offset(ai)),
-          Node::Auxiliary(bc.tree().offset(bj)),
-        )
+    av.reserve(a.tree().root().length() / 2 + 1);
+    for i in 0..a.tree().root().length() {
+      let node = a.tree().node(i);
+      match node {
+        Node::Auxiliary(t) if a.tree().contains(t) => av.push((
+          i,
+          Err((t.0 as usize - a.tree().0 as usize) / size_of::<usize>()),
+        )),
+        Node::Auxiliary(_) | Node::Principal(_) => {
+          av.push((i, Ok(OwnedTree::clone(b))));
+        }
+        _ => {}
       }
     }
-    for (ai, b) in av.drain(..) {
-      self.bind(a.tree().node(ai), b)
+    for i in 0..b.tree().root().length() {
+      let node = b.tree().node(i);
+      match node {
+        Node::Auxiliary(t) if b.tree().contains(t) => bv.push((
+          i,
+          Err((t.0 as usize - b.tree().0 as usize) / size_of::<usize>()),
+        )),
+        Node::Auxiliary(_) | Node::Principal(_) => {
+          bv.push((i, Ok(OwnedTree::clone(a))));
+        }
+        _ => {}
+      }
     }
-    for (bi, a) in bv.drain(..) {
-      self.bind(b.tree().node(bi), a)
+    for &(ai, bc) in av.iter() {
+      for &(bj, ac) in bv.iter() {
+        match (ac, bc) {
+          (Ok(ac), Ok(bc)) => self.link(
+            Node::Auxiliary(ac.tree().offset(ai)),
+            Node::Auxiliary(bc.tree().offset(bj)),
+          ),
+          (Ok(ac), Err(i)) => unsafe {
+            *ac.tree().offset(ai).0 = Node::Auxiliary(ac.tree().offset(i)).pack()
+          },
+          (Err(i), Ok(bc)) => unsafe {
+            *bc.tree().offset(bj).0 = Node::Auxiliary(bc.tree().offset(i)).pack()
+          },
+          _ => {}
+        }
+      }
+    }
+    for (ai, bc) in av.drain(..) {
+      if let Ok(bc) = bc {
+        self.bind(a.tree().node(ai), bc)
+      }
+    }
+    for (bi, ac) in bv.drain(..) {
+      if let Ok(ac) = ac {
+        self.bind(b.tree().node(bi), ac)
+      }
     }
     self.av = av;
     self.bv = bv;
