@@ -2,6 +2,7 @@
 #![feature(allocator_api)]
 #![feature(const_mut_refs)]
 #![feature(new_uninit)]
+#![feature(stmt_expr_attributes)]
 
 mod net;
 mod node;

@@ -79,6 +79,7 @@ impl Net {
         _ => {}
       }
     }
+    bv.reserve(b.root().length() / 2 + 1);
     for i in 0..b.root().length() {
       let node = b.node(i);
       match node {
@@ -104,39 +105,39 @@ impl Net {
         }
       }
     }
-    for (ai, bc) in av.drain(..) {
+    for &(ai, bc) in &av {
       if let Ok(bc) = bc {
         self.bind(a.node(ai), bc)
       }
     }
-    for (bi, ac) in bv.drain(..) {
+    for &(bi, ac) in &bv {
       if let Ok(ac) = ac {
         self.bind(b.node(bi), ac)
       }
     }
+    av.clear();
+    bv.clear();
     self.av = av;
     self.bv = bv;
   }
 
   #[inline(never)]
-  pub fn annihilate(&mut self, a: Tree, b: Tree) {
+  pub fn annihilate(&mut self, mut a: Tree, mut b: Tree) {
     self.a += 1;
-    let mut a = a;
-    let mut b = b;
     let mut n = 1usize;
     let mut a_era_stack = 0usize;
     let mut b_era_stack = 0usize;
     while n > 0 {
       match (a.root(), b.root()) {
-        (Node::Era, Node::Ctr(_, _)) => {
+        (Node::Era, Node::Ctr(..)) => {
           n += 2;
           a_era_stack += 2;
         }
-        (Node::Ctr(_, _), Node::Era) => {
+        (Node::Ctr(..), Node::Era) => {
           n += 2;
           b_era_stack += 2
         }
-        (Node::Ctr(_, _), Node::Ctr(_, _)) => n += 2,
+        (Node::Ctr(..), Node::Ctr(..)) => n += 2,
         (r, Node::Ctr(l, _)) => {
           self.bind(r, b);
           b = b.offset(l - 1);
