@@ -18,7 +18,7 @@ fn print_tree(f: &mut std::fmt::Formatter, kind: Option<usize>, tree: Tree) -> s
       };
       write!(f, "{:?}-{:?}", a, b)
     },
-    Node::Ctr(_) => {
+    Node::Ctr(..) => {
       match kind {
         Some(0) => write!(f, "(")?,
         Some(1) => write!(f, "[")?,

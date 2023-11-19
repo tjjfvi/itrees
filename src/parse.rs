@@ -127,14 +127,14 @@ fn parse_tree_into<'a>(
     tree.push(PackedNode::ERA);
     parse_tree_into(Some(kind), &mut tree, lexer, scope, vars)?;
     parse_tree_into(Some(kind), &mut tree, lexer, scope, vars)?;
-    tree[1] = Node::Ctr(tree.len() - 1).pack();
+    tree[1] = Node::Ctr(tree.len() - 1, kind).pack();
     into.push(Node::Principal(finish_tree(tree)).pack());
   } else {
     let i = into.len();
     into.push(PackedNode::ERA);
     parse_tree_into(into_kind, into, lexer, scope, vars)?;
     parse_tree_into(into_kind, into, lexer, scope, vars)?;
-    into[i] = Node::Ctr(into.len() - i).pack();
+    into[i] = Node::Ctr(into.len() - i, kind).pack();
   }
   if lexer.next().ok_or(Error::UnexpectedEOF)?? != close {
     Err(Error::InvalidClose)?

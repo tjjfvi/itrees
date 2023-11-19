@@ -137,20 +137,20 @@ impl Net {
     let mut b_era_stack = 0usize;
     while n > 0 {
       match (a.root(), b.root()) {
-        (Node::Era, Node::Ctr(_)) => {
+        (Node::Era, Node::Ctr(_, _)) => {
           n += 2;
           a_era_stack += 2;
         }
-        (Node::Ctr(_), Node::Era) => {
+        (Node::Ctr(_, _), Node::Era) => {
           n += 2;
           b_era_stack += 2
         }
-        (Node::Ctr(_), Node::Ctr(_)) => n += 2,
-        (r, Node::Ctr(l)) => {
+        (Node::Ctr(_, _), Node::Ctr(_, _)) => n += 2,
+        (r, Node::Ctr(l, _)) => {
           self.bind(r, OwnedTree::take(kind, b));
           b = b.offset(l - 1);
         }
-        (Node::Ctr(l), r) => {
+        (Node::Ctr(l, _), r) => {
           self.bind(r, OwnedTree::take(kind, a));
           a = a.offset(l - 1);
         }

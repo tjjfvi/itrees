@@ -12,7 +12,7 @@ pub enum Node {
   Era,
   Principal(OwnedTree),
   Auxiliary(Tree),
-  Ctr(usize),
+  Ctr(usize, usize),
 }
 
 impl PackedNode {
@@ -21,7 +21,7 @@ impl PackedNode {
   #[inline(always)]
   pub fn unpack(self) -> Node {
     if self.0 & 1 == 1 {
-      Node::Ctr(self.0)
+      Node::Ctr(self.0 & (u32::MAX as usize), self.0 >> 32)
     } else if self.0 == 0 {
       Node::Era
     } else if self.0 & 0b10 != 0 {
@@ -39,14 +39,14 @@ impl Node {
       Node::Era => PackedNode::ERA,
       Node::Principal(r) => PackedNode(r.0 as usize | 0b10),
       Node::Auxiliary(r) => PackedNode(r.0 as usize),
-      Node::Ctr(len) => PackedNode(len | 1),
+      Node::Ctr(len, kind) => PackedNode(len | 1 | (kind << 32)),
     }
   }
 
   #[inline(always)]
   pub fn length(self) -> usize {
     match self {
-      Node::Ctr(d) => d,
+      Node::Ctr(d, _) => d,
       _ => 1,
     }
   }
