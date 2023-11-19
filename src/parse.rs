@@ -61,9 +61,9 @@ fn finish_trees(trees: Vec<PackedNode>) -> *mut [PackedNode] {
   Box::into_raw(data)
 }
 
-fn finish_tree(tree: Vec<PackedNode>) -> OwnedTree {
+fn finish_tree(tree: Vec<PackedNode>) -> Tree {
   let mut data = tree.into_boxed_slice();
-  for word in &mut data[1..] {
+  for word in &mut *data {
     *word = finish_word(*word);
     match word.unpack() {
       Node::Auxiliary(r) => unsafe {
@@ -72,7 +72,7 @@ fn finish_tree(tree: Vec<PackedNode>) -> OwnedTree {
       _ => {}
     }
   }
-  OwnedTree(Box::into_raw(data) as *mut _)
+  Tree(Box::into_raw(data) as *mut _)
 }
 
 fn finish_word(word: PackedNode) -> PackedNode {
@@ -123,11 +123,10 @@ fn parse_tree_into<'a>(
     _ => Err(Error::ExpectedTree)?,
   };
   if Some(kind) != into_kind {
-    let mut tree = vec![PackedNode(kind)];
-    tree.push(PackedNode::ERA);
+    let mut tree = vec![PackedNode::ERA];
     parse_tree_into(Some(kind), &mut tree, lexer, scope, vars)?;
     parse_tree_into(Some(kind), &mut tree, lexer, scope, vars)?;
-    tree[1] = Node::Ctr(tree.len() - 1, kind).pack();
+    tree[0] = Node::Ctr(tree.len() - 1, kind).pack();
     into.push(Node::Principal(finish_tree(tree)).pack());
   } else {
     let i = into.len();

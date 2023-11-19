@@ -10,7 +10,7 @@ delegate_debug!({impl Debug for PackedNode} (self) => self.unpack());
 #[derive(Debug, Clone, Copy)]
 pub enum Node {
   Era,
-  Principal(OwnedTree),
+  Principal(Tree),
   Auxiliary(Tree),
   Ctr(usize, usize),
 }
@@ -25,7 +25,7 @@ impl PackedNode {
     } else if self.0 == 0 {
       Node::Era
     } else if self.0 & 0b10 != 0 {
-      Node::Principal(OwnedTree((self.0 & !0b10) as _))
+      Node::Principal(Tree((self.0 & !0b10) as _))
     } else {
       Node::Auxiliary(Tree(self.0 as _))
     }

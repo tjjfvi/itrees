@@ -3,11 +3,11 @@ use std::{hint::unreachable_unchecked, mem::size_of};
 
 #[derive(Default, Debug)]
 pub struct Net {
-  pub active: Vec<(OwnedTree, OwnedTree)>,
+  pub active: Vec<(Tree, Tree)>,
   pub a: usize,
   pub c: usize,
-  pub av: Vec<(usize, Result<OwnedTree, usize>)>,
-  pub bv: Vec<(usize, Result<OwnedTree, usize>)>,
+  pub av: Vec<(usize, Result<Tree, usize>)>,
+  pub bv: Vec<(usize, Result<Tree, usize>)>,
 }
 
 impl Net {
@@ -19,7 +19,7 @@ impl Net {
         *r.0 = PackedNode::ERA
       },
       (Node::Era, Node::Principal(r)) | (Node::Principal(r), Node::Era) => {
-        self.active.push((r, OwnedTree::era(r.kind())))
+        self.active.push((r, Tree::era()))
       }
       (Node::Principal(a), Node::Principal(b)) => self.active.push((a, b)),
       (Node::Principal(_), Node::Auxiliary(b)) => unsafe { *b.0 = a.pack() },
@@ -33,7 +33,7 @@ impl Net {
   }
 
   #[inline(always)]
-  pub fn bind(&mut self, a: Node, b: OwnedTree) {
+  pub fn bind(&mut self, a: Node, b: Tree) {
     match a {
       Node::Principal(a) => self.active.push((a, b)),
       Node::Auxiliary(a) => unsafe { *a.0 = Node::Principal(b).pack() },
@@ -48,8 +48,6 @@ impl Net {
     } else {
       self.commute(a, b);
     }
-    a.drop();
-    b.drop();
     Some(())
   }
 
@@ -64,33 +62,31 @@ impl Net {
   }
 
   #[inline(never)]
-  pub fn commute(&mut self, a: OwnedTree, b: OwnedTree) {
+  pub fn commute(&mut self, a: Tree, b: Tree) {
     self.c += 1;
     let mut av = std::mem::take(&mut self.av);
     let mut bv = std::mem::take(&mut self.bv);
-    av.reserve(a.tree().root().length() / 2 + 1);
-    for i in 0..a.tree().root().length() {
-      let node = a.tree().node(i);
+    av.reserve(a.root().length() / 2 + 1);
+    for i in 0..a.root().length() {
+      let node = a.node(i);
       match node {
-        Node::Auxiliary(t) if a.tree().contains(t) => av.push((
-          i,
-          Err((t.0 as usize - a.tree().0 as usize) / size_of::<usize>()),
-        )),
+        Node::Auxiliary(t) if a.contains(t) => {
+          av.push((i, Err((t.0 as usize - a.0 as usize) / size_of::<usize>())))
+        }
         Node::Auxiliary(_) | Node::Principal(_) => {
-          av.push((i, Ok(OwnedTree::clone(b))));
+          av.push((i, Ok(Tree::clone(b))));
         }
         _ => {}
       }
     }
-    for i in 0..b.tree().root().length() {
-      let node = b.tree().node(i);
+    for i in 0..b.root().length() {
+      let node = b.node(i);
       match node {
-        Node::Auxiliary(t) if b.tree().contains(t) => bv.push((
-          i,
-          Err((t.0 as usize - b.tree().0 as usize) / size_of::<usize>()),
-        )),
+        Node::Auxiliary(t) if b.contains(t) => {
+          bv.push((i, Err((t.0 as usize - b.0 as usize) / size_of::<usize>())))
+        }
         Node::Auxiliary(_) | Node::Principal(_) => {
-          bv.push((i, Ok(OwnedTree::clone(a))));
+          bv.push((i, Ok(Tree::clone(a))));
         }
         _ => {}
       }
@@ -99,27 +95,23 @@ impl Net {
       for &(bj, ac) in bv.iter() {
         match (ac, bc) {
           (Ok(ac), Ok(bc)) => self.link(
-            Node::Auxiliary(ac.tree().offset(ai)),
-            Node::Auxiliary(bc.tree().offset(bj)),
+            Node::Auxiliary(ac.offset(ai)),
+            Node::Auxiliary(bc.offset(bj)),
           ),
-          (Ok(ac), Err(i)) => unsafe {
-            *ac.tree().offset(ai).0 = Node::Auxiliary(ac.tree().offset(i)).pack()
-          },
-          (Err(i), Ok(bc)) => unsafe {
-            *bc.tree().offset(bj).0 = Node::Auxiliary(bc.tree().offset(i)).pack()
-          },
+          (Ok(ac), Err(i)) => unsafe { *ac.offset(ai).0 = Node::Auxiliary(ac.offset(i)).pack() },
+          (Err(i), Ok(bc)) => unsafe { *bc.offset(bj).0 = Node::Auxiliary(bc.offset(i)).pack() },
           _ => {}
         }
       }
     }
     for (ai, bc) in av.drain(..) {
       if let Ok(bc) = bc {
-        self.bind(a.tree().node(ai), bc)
+        self.bind(a.node(ai), bc)
       }
     }
     for (bi, ac) in bv.drain(..) {
       if let Ok(ac) = ac {
-        self.bind(b.tree().node(bi), ac)
+        self.bind(b.node(bi), ac)
       }
     }
     self.av = av;
@@ -127,11 +119,10 @@ impl Net {
   }
 
   #[inline(never)]
-  pub fn annihilate(&mut self, a: OwnedTree, b: OwnedTree) {
+  pub fn annihilate(&mut self, a: Tree, b: Tree) {
     self.a += 1;
-    let kind = a.kind();
-    let mut a = a.tree();
-    let mut b = b.tree();
+    let mut a = a;
+    let mut b = b;
     let mut n = 1usize;
     let mut a_era_stack = 0usize;
     let mut b_era_stack = 0usize;
@@ -147,11 +138,11 @@ impl Net {
         }
         (Node::Ctr(_, _), Node::Ctr(_, _)) => n += 2,
         (r, Node::Ctr(l, _)) => {
-          self.bind(r, OwnedTree::take(kind, b));
+          self.bind(r, b);
           b = b.offset(l - 1);
         }
         (Node::Ctr(l, _), r) => {
-          self.bind(r, OwnedTree::take(kind, a));
+          self.bind(r, a);
           a = a.offset(l - 1);
         }
         (a, b) => self.link(a, b),

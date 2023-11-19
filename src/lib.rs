@@ -57,6 +57,7 @@ use std::{
 #[allow(unused)]
 fn main() {
   let program = include_str!("../programs/dec_bits_comp.ic");
+  // let program = "a (a (x x)) = (b b)";
 
   let (a, mut b) = parse_program(program).unwrap();
 
