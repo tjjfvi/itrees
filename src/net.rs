@@ -19,7 +19,7 @@ impl Net {
         *r.0 = PackedNode::ERA
       },
       (Node::Era, Node::Principal(r)) | (Node::Principal(r), Node::Era) => {
-        self.active.push((r, Tree::era()))
+        self.active.push((r, Tree::ERA))
       }
       (Node::Principal(a), Node::Principal(b)) => self.active.push((a, b)),
       (Node::Principal(_), Node::Auxiliary(b)) => unsafe { *b.0 = a.pack() },
@@ -43,7 +43,7 @@ impl Net {
 
   pub fn reduce_one(&mut self) -> Option<()> {
     let (a, b) = self.active.pop()?;
-    if a.kind() == b.kind() {
+    if a.kind().is_none() || b.kind().is_none() || a.kind() == b.kind() {
       self.annihilate(a, b);
     } else {
       self.commute(a, b);

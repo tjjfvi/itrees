@@ -4,10 +4,10 @@ fn print_tree(f: &mut std::fmt::Formatter, kind: Option<usize>, tree: Tree) -> s
   match tree.root() {
     Node::Era => write!(f, "*"),
     Node::Principal(t) => {
-      if Some(t.kind()) == kind {
+      if t.kind() == kind {
         write!(f, "#")?;
       }
-      print_tree(f, Some(t.kind()), t)
+      print_tree(f, t.kind(), t)
     }
     Node::Auxiliary(r) => unsafe {
       let (a, b) = (r.0, (*r.0).0 as *mut PackedNode);

@@ -5,6 +5,7 @@ use std::mem::size_of;
 pub struct Tree(pub *mut PackedNode);
 
 impl Tree {
+  pub const ERA: Tree = Tree(&PackedNode::ERA as *const _ as *mut _);
   #[inline(always)]
   pub fn root(self) -> Node {
     unsafe { *self.0 }.unpack()
@@ -23,15 +24,11 @@ impl Tree {
       .contains(&(tree.0 as usize))
   }
   #[inline(always)]
-  pub fn kind(self) -> usize {
+  pub fn kind(self) -> Option<usize> {
     match self.root() {
-      Node::Ctr(_, kind) => kind,
-      _ => 0,
+      Node::Ctr(_, kind) => Some(kind),
+      _ => None,
     }
-  }
-  #[inline(never)]
-  pub fn era() -> Tree {
-    Tree(Box::into_raw(Box::new([0usize])) as *mut _)
   }
   #[inline(never)]
   pub fn clone(raw: Tree) -> Tree {
