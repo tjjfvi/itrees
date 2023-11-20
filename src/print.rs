@@ -11,10 +11,10 @@ fn print_tree(
       Ok(tree.offset(1))
     }
     Node::Principal(t) => {
-      if t.kind() == kind {
+      if Some(t.kind()) == kind {
         write!(f, "#")?;
       }
-      print_tree(f, t.kind(), t)?;
+      print_tree(f, Some(t.kind()), t)?;
       Ok(tree.offset(1))
     }
     Node::Auxiliary(r) => unsafe {

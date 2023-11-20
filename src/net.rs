@@ -6,6 +6,7 @@ pub struct Net {
   pub active: Vec<(Tree, Tree)>,
   pub anni: usize,
   pub comm: usize,
+  pub eras: usize,
   pub grft: usize,
   pub time: Duration,
   pub av: Vec<(Tree, usize, Result<Tree, usize>)>,
@@ -23,7 +24,7 @@ impl Net {
         *r.0 = PackedNode::ERA
       },
       (Node::Era, Node::Principal(r)) | (Node::Principal(r), Node::Era) => {
-        self.active.push((r, Tree::ERA))
+        self.active.push((r, Tree::NULL))
       }
       (Node::Principal(a), Node::Principal(b)) => self.active.push((a, b)),
       (Node::Principal(_), Node::Auxiliary(b)) => unsafe { *b.0 = a.pack() },
@@ -49,7 +50,9 @@ impl Net {
   pub fn reduce(&mut self) {
     let start = Instant::now();
     while let Some((a, b)) = self.active.pop() {
-      if a.kind().is_none() || b.kind().is_none() || a.kind() == b.kind() {
+      if b.0 == Tree::NULL.0 {
+        self.erase(a);
+      } else if a.kind() == b.kind() {
         self.annihilate(a, b);
       } else {
         self.commute(a, b);
@@ -60,8 +63,8 @@ impl Net {
 
   pub fn print_stats(&self) {
     println!(
-      "anni: {}; comm: {}; grft: {}; time: {:.2?}",
-      self.anni, self.comm, self.grft, self.time
+      "anni: {}; comm: {}; eras: {}; grft: {}; time: {:.2?}",
+      self.anni, self.comm, self.eras, self.grft, self.time
     );
   }
 
@@ -164,6 +167,23 @@ impl Net {
         let len = bt.len();
         *bc = Ok(Tree::clone(Tree(&mut bt[0] as *mut _), len));
       }
+    }
+  }
+
+  pub fn erase(&mut self, mut a: Tree) {
+    self.eras += 1;
+    let mut n = 1;
+    while n > 0 {
+      match a.root() {
+        Node::Ctr(..) => {
+          n += 1;
+        }
+        x => {
+          self.link(x, Node::Era);
+          n -= 1;
+        }
+      }
+      a = a.offset(1);
     }
   }
 

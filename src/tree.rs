@@ -1,10 +1,11 @@
+use std::hint::unreachable_unchecked;
+
 use crate::*;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Tree(pub *mut PackedNode);
 
 impl Tree {
-  pub const ERA: Tree = Tree(&PackedNode::ERA as *const _ as *mut _);
   pub const NULL: Tree = Tree(std::ptr::null_mut());
 
   #[inline(always)]
@@ -20,10 +21,10 @@ impl Tree {
     self.offset(index).root()
   }
   #[inline(always)]
-  pub fn kind(self) -> Option<usize> {
+  pub fn kind(self) -> usize {
     match self.root() {
-      Node::Ctr(kind) => Some(kind),
-      _ => None,
+      Node::Ctr(kind) => kind,
+      _ => unsafe { unreachable_unchecked() },
     }
   }
   #[inline(never)]
