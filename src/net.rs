@@ -1,5 +1,5 @@
 use crate::*;
-use std::{hint::unreachable_unchecked, time::Duration};
+use std::{hint::unreachable_unchecked, mem::size_of, time::Duration};
 
 #[derive(Default, Debug)]
 pub struct Net {
@@ -70,61 +70,12 @@ impl Net {
     self.comm += 1;
     let mut av = std::mem::take(&mut self.av);
     let mut bv = std::mem::take(&mut self.bv);
-    let mut a_len = 1;
-    let mut i = 0;
-    while i < a_len {
-      let node = a.node(i);
-      match node {
-        // Node::Auxiliary(t) if a.contains(t) => av.push((
-        //   node.pack(),
-        //   i,
-        //   Err((t.0 as usize - a.0 as usize) / size_of::<usize>()),
-        // )),
-        // Node::Principal(p) if p.kind() == a.kind() => {
-        //   self.g += 1;
-        //   todo!()
-        // }
-        Node::Auxiliary(_) | Node::Principal(_) => {
-          av.push((a.offset(i), i, Ok(Tree::NULL)));
-        }
-        Node::Ctr(..) => {
-          a_len += 2;
-        }
-        _ => {}
-      }
-      i += 1;
-    }
-    let mut b_len = 1;
-    let mut i = 0;
-    while i < b_len {
-      // dbg!(i);
-      let node = b.node(i);
-      match node {
-        // Node::Auxiliary(t) if b.contains(t) => bv.push((
-        //   node.pack(),
-        //   i,
-        //   Err((t.0 as usize - b.0 as usize) / size_of::<usize>()),
-        // )),
-        Node::Auxiliary(_) | Node::Principal(_) => {
-          bv.push((b.offset(i), i, Ok(Tree::NULL)));
-        }
-        Node::Ctr(..) => {
-          b_len += 2;
-        }
-        _ => {}
-      }
-      i += 1;
-    }
-    for (_, _, bc) in av.iter_mut() {
-      if let Ok(bc) = bc {
-        *bc = Tree::clone(b, b_len);
-      }
-    }
-    for (_, _, ac) in bv.iter_mut() {
-      if let Ok(ac) = ac {
-        *ac = Tree::clone(a, a_len);
-      }
-    }
+    let a_len = _commute_scan(&mut self.grft, &mut self.at, a, &mut av);
+    let b_len = _commute_scan(&mut self.grft, &mut self.bt, b, &mut bv);
+    _commute_copy(a_len == self.at.len(), &mut self.bt, &mut av, a_len, a);
+    _commute_copy(b_len == self.bt.len(), &mut self.at, &mut bv, b_len, b);
+    self.at.clear();
+    self.bt.clear();
     for &(_, ai, bc) in av.iter() {
       for &(_, bj, ac) in bv.iter() {
         match (ac, bc) {
@@ -152,6 +103,68 @@ impl Net {
     bv.clear();
     self.av = av;
     self.bv = bv;
+
+    fn _commute_scan(
+      g: &mut usize,
+      t: &mut Vec<PackedNode>,
+      mut a: Tree,
+      av: &mut Vec<(Tree, usize, Result<Tree, usize>)>,
+    ) -> usize {
+      let mut a_len = 1;
+      let mut i = 0;
+      let kind = a.kind();
+      while i < a_len {
+        let node = a.root();
+        match node {
+          Node::Principal(mut p) if p.kind() == kind => {
+            *g += 1;
+            let mut n = 1;
+            while n > 0 {
+              let node = p.root();
+              match node {
+                Node::Ctr(..) => n += 2,
+                Node::Era => {}
+                _ => av.push((p, t.len(), Ok(Tree::NULL))),
+              }
+              t.push(node.pack());
+              n -= 1;
+              p = p.offset(1);
+            }
+            i += 1;
+            a = a.offset(1);
+            continue;
+          }
+          Node::Ctr(..) => a_len += 2,
+          Node::Era => {}
+          _ => av.push((a, t.len(), Ok(Tree::NULL))),
+        }
+        t.push(node.pack());
+        i += 1;
+        a = a.offset(1);
+      }
+      a_len
+    }
+
+    fn _commute_copy(
+      x: bool,
+      bt: &mut Vec<PackedNode>,
+      av: &mut Vec<(Tree, usize, Result<Tree, usize>)>,
+      a_len: usize,
+      a: Tree,
+    ) {
+      for (aa, _, bc) in av.iter_mut() {
+        if x {
+          if let Node::Auxiliary(t) = aa.root() {
+            if (a.0 as usize..a.0 as usize + a_len * size_of::<usize>()).contains(&(t.0 as usize)) {
+              *bc = Err((t.0 as usize - a.0 as usize) / size_of::<usize>());
+              continue;
+            }
+          }
+        }
+        let len = bt.len();
+        *bc = Ok(Tree::clone(Tree(&mut bt[0] as *mut _), len));
+      }
+    }
   }
 
   #[inline(never)]
