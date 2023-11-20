@@ -180,12 +180,13 @@ impl Net {
     self.anni += 1;
     let mut n = 1usize;
     while n > 0 {
-      match (a.node(), b.node()) {
-        (Node::Era, Node::Ctr(..)) => {
+      match ((a.node(), &mut a), (b.node(), &mut b)) {
+        ((Node::Ctr(..), _), (Node::Ctr(..), _)) => n += 2,
+        ((Node::Ctr(..), t), (Node::Era, _)) | ((Node::Era, _), (Node::Ctr(..), t)) => {
           let mut n = 2;
           while n > 0 {
-            b = b.offset(1);
-            match b.node() {
+            *t = t.offset(1);
+            match t.node() {
               Node::Ctr(..) => {
                 n += 1;
               }
@@ -196,28 +197,12 @@ impl Net {
             }
           }
         }
-        (Node::Ctr(..), Node::Era) => {
+        ((Node::Ctr(_), t), (r, _)) | ((r, _), (Node::Ctr(_), t)) => {
+          self.bind(r, *t);
           let mut n = 2;
           while n > 0 {
-            a = a.offset(1);
-            match a.node() {
-              Node::Ctr(..) => {
-                n += 1;
-              }
-              x => {
-                self.link(x, Node::Era);
-                n -= 1;
-              }
-            }
-          }
-        }
-        (Node::Ctr(..), Node::Ctr(..)) => n += 2,
-        (r, Node::Ctr(_)) => {
-          self.bind(r, b);
-          let mut n = 2;
-          while n > 0 {
-            b = b.offset(1);
-            match b.node() {
+            *t = t.offset(1);
+            match t.node() {
               Node::Ctr(_) => {
                 n += 1;
               }
@@ -227,22 +212,7 @@ impl Net {
             }
           }
         }
-        (Node::Ctr(_), r) => {
-          self.bind(r, a);
-          let mut n = 2;
-          while n > 0 {
-            a = a.offset(1);
-            match a.node() {
-              Node::Ctr(_) => {
-                n += 1;
-              }
-              _ => {
-                n -= 1;
-              }
-            }
-          }
-        }
-        (a, b) => self.link(a, b),
+        ((a, _), (b, _)) => self.link(a, b),
       }
       a = a.offset(1);
       b = b.offset(1);
