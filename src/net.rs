@@ -3,21 +3,21 @@ use std::{hint::unreachable_unchecked, mem::size_of, time::Duration};
 
 #[derive(Default, Debug)]
 pub struct Net {
-  pub active: Vec<(Tree, Tree)>,
-  pub anni: usize,
-  pub comm: usize,
-  pub eras: usize,
-  pub grft: usize,
-  pub time: Duration,
-  pub av: Vec<(Tree, usize, Result<Tree, usize>)>,
-  pub at: Vec<PackedNode>,
-  pub bv: Vec<(Tree, usize, Result<Tree, usize>)>,
-  pub bt: Vec<PackedNode>,
+  pub(crate) active: Vec<(Tree, Tree)>,
+  pub(crate) anni: usize,
+  pub(crate) comm: usize,
+  pub(crate) eras: usize,
+  pub(crate) grft: usize,
+  pub(crate) time: Duration,
+  pub(crate) av: Vec<(Tree, usize, Result<Tree, usize>)>,
+  pub(crate) at: Vec<PackedNode>,
+  pub(crate) bv: Vec<(Tree, usize, Result<Tree, usize>)>,
+  pub(crate) bt: Vec<PackedNode>,
 }
 
 impl Net {
   #[inline(always)]
-  pub fn link(&mut self, a: Node, b: Node) {
+  pub(crate) fn link(&mut self, a: Node, b: Node) {
     match (a, b) {
       (Node::Era, Node::Era) => {}
       (Node::Era, Node::Auxiliary(r)) | (Node::Auxiliary(r), Node::Era) => unsafe {
@@ -38,7 +38,7 @@ impl Net {
   }
 
   #[inline(always)]
-  pub fn bind(&mut self, a: Node, b: Tree) {
+  pub(crate) fn bind(&mut self, a: Node, b: Tree) {
     match a {
       Node::Principal(a) => self.active.push((a, b)),
       Node::Auxiliary(a) => unsafe { *a.0 = Node::Principal(b).pack() },
@@ -69,7 +69,7 @@ impl Net {
   }
 
   #[inline(never)]
-  pub fn commute(&mut self, a: Tree, b: Tree) {
+  pub(crate) fn commute(&mut self, a: Tree, b: Tree) {
     self.comm += 1;
     let mut av = std::mem::take(&mut self.av);
     let mut bv = std::mem::take(&mut self.bv);
@@ -94,12 +94,12 @@ impl Net {
     }
     for &(aa, _, bc) in &av {
       if let Ok(bc) = bc {
-        self.bind(aa.root(), bc)
+        self.bind(aa.node(), bc)
       }
     }
     for &(ba, _, ac) in &bv {
       if let Ok(ac) = ac {
-        self.bind(ba.root(), ac)
+        self.bind(ba.node(), ac)
       }
     }
     av.clear();
@@ -117,13 +117,13 @@ impl Net {
       let mut i = 0;
       let kind = a.kind();
       while i < a_len {
-        let node = a.root();
+        let node = a.node();
         match node {
           Node::Principal(mut p) if p.kind() == kind => {
             *g += 1;
             let mut n = 1;
             while n > 0 {
-              let node = p.root();
+              let node = p.node();
               match node {
                 Node::Ctr(..) => n += 2,
                 Node::Era => {}
@@ -157,7 +157,7 @@ impl Net {
     ) {
       for (aa, _, bc) in av.iter_mut() {
         if x {
-          if let Node::Auxiliary(t) = aa.root() {
+          if let Node::Auxiliary(t) = aa.node() {
             if (a.0 as usize..a.0 as usize + a_len * size_of::<usize>()).contains(&(t.0 as usize)) {
               *bc = Err((t.0 as usize - a.0 as usize) / size_of::<usize>());
               continue;
@@ -170,11 +170,11 @@ impl Net {
     }
   }
 
-  pub fn erase(&mut self, mut a: Tree) {
+  pub(crate) fn erase(&mut self, mut a: Tree) {
     self.eras += 1;
     let mut n = 1;
     while n > 0 {
-      match a.root() {
+      match a.node() {
         Node::Ctr(..) => {
           n += 1;
         }
@@ -188,16 +188,16 @@ impl Net {
   }
 
   #[inline(never)]
-  pub fn annihilate(&mut self, mut a: Tree, mut b: Tree) {
+  pub(crate) fn annihilate(&mut self, mut a: Tree, mut b: Tree) {
     self.anni += 1;
     let mut n = 1usize;
     while n > 0 {
-      match (a.root(), b.root()) {
+      match (a.node(), b.node()) {
         (Node::Era, Node::Ctr(..)) => {
           let mut n = 2;
           while n > 0 {
             b = b.offset(1);
-            match b.root() {
+            match b.node() {
               Node::Ctr(..) => {
                 n += 1;
               }
@@ -212,7 +212,7 @@ impl Net {
           let mut n = 2;
           while n > 0 {
             a = a.offset(1);
-            match a.root() {
+            match a.node() {
               Node::Ctr(..) => {
                 n += 1;
               }
@@ -229,7 +229,7 @@ impl Net {
           let mut n = 2;
           while n > 0 {
             b = b.offset(1);
-            match b.root() {
+            match b.node() {
               Node::Ctr(_) => {
                 n += 1;
               }
@@ -244,7 +244,7 @@ impl Net {
           let mut n = 2;
           while n > 0 {
             a = a.offset(1);
-            match a.root() {
+            match a.node() {
               Node::Ctr(_) => {
                 n += 1;
               }

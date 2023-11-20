@@ -22,7 +22,7 @@ impl Default for Error {
 #[derive(Clone, Copy, Logos, Debug, PartialEq, Eq)]
 #[logos(skip r"[ \t\n]+")]
 #[logos(error = Error)]
-pub enum Token<'a> {
+pub(crate) enum Token<'a> {
   #[token("=")]
   Eq,
   #[token("*")]

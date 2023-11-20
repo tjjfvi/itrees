@@ -47,7 +47,7 @@ pub use net::*;
 pub use node::*;
 pub use parse::*;
 pub use print::*;
-pub use tree::*;
+pub(crate) use tree::*;
 
 use std::{
   alloc::{GlobalAlloc, Layout, System},

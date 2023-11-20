@@ -5,7 +5,7 @@ fn print_tree(
   kind: Option<usize>,
   tree: Tree,
 ) -> Result<Tree, std::fmt::Error> {
-  match tree.root() {
+  match tree.node() {
     Node::Era => {
       write!(f, "*")?;
       Ok(tree.offset(1))
@@ -47,7 +47,7 @@ fn print_tree(
   }
 }
 
-pub struct PrintNet<'a>(pub *mut [PackedNode], pub &'a Net);
+pub struct PrintNet<'a>(pub(crate) *mut [PackedNode], pub(crate) &'a Net);
 
 impl<'a> Debug for PrintNet<'a> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
