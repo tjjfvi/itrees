@@ -24,9 +24,7 @@ impl Tree {
     }
   }
   #[inline(never)]
-  pub(crate) fn clone(tree: Tree, len: usize) -> Tree {
-    let mut buffer = Box::<[usize]>::new_uninit_slice(len);
-    unsafe { std::ptr::copy_nonoverlapping(tree.0, &mut buffer[0] as *mut _ as *mut _, len) };
-    Tree(Box::into_raw(buffer) as *mut _)
+  pub(crate) fn new(data: &[PackedNode]) -> Tree {
+    Tree(Box::into_raw(Box::<[_]>::from(data)) as *mut _)
   }
 }

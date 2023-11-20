@@ -75,8 +75,8 @@ impl Net {
     let mut bv = std::mem::take(&mut self.bv);
     let a_len = _commute_scan(&mut self.grft, &mut self.at, a, &mut av);
     let b_len = _commute_scan(&mut self.grft, &mut self.bt, b, &mut bv);
-    _commute_copy(a_len == self.at.len(), &mut self.bt, &mut av, a_len, a);
-    _commute_copy(b_len == self.bt.len(), &mut self.at, &mut bv, b_len, b);
+    _commute_copy(a_len == self.at.len(), &self.bt, &mut av, a_len, a);
+    _commute_copy(b_len == self.bt.len(), &self.at, &mut bv, b_len, b);
     self.at.clear();
     self.bt.clear();
     for &(_, ai, bc) in av.iter() {
@@ -150,7 +150,7 @@ impl Net {
 
     fn _commute_copy(
       x: bool,
-      bt: &mut Vec<PackedNode>,
+      bt: &Vec<PackedNode>,
       av: &mut Vec<(Tree, usize, Result<Tree, usize>)>,
       a_len: usize,
       a: Tree,
@@ -164,8 +164,7 @@ impl Net {
             }
           }
         }
-        let len = bt.len();
-        *bc = Ok(Tree::clone(Tree(&mut bt[0] as *mut _), len));
+        *bc = Ok(Tree::new(bt));
       }
     }
   }
