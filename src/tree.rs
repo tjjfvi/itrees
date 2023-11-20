@@ -1,11 +1,12 @@
 use crate::*;
-use std::mem::size_of;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Tree(pub *mut PackedNode);
 
 impl Tree {
   pub const ERA: Tree = Tree(&PackedNode::ERA as *const _ as *mut _);
+  pub const NULL: Tree = Tree(std::ptr::null_mut());
+
   #[inline(always)]
   pub fn root(self) -> Node {
     unsafe { *self.0 }.unpack()
@@ -19,21 +20,14 @@ impl Tree {
     self.offset(index).root()
   }
   #[inline(always)]
-  pub fn contains(self, tree: Tree) -> bool {
-    (self.0 as usize..self.0 as usize + self.root().length() * size_of::<usize>())
-      .contains(&(tree.0 as usize))
-  }
-  #[inline(always)]
   pub fn kind(self) -> Option<usize> {
     match self.root() {
-      Node::Ctr(_, kind) => Some(kind),
+      Node::Ctr(kind) => Some(kind),
       _ => None,
     }
   }
   #[inline(never)]
-  pub fn clone(raw: Tree) -> Tree {
-    let tree = raw;
-    let len = tree.root().length();
+  pub fn clone(tree: Tree, len: usize) -> Tree {
     let mut buffer = Box::<[usize]>::new_uninit_slice(len);
     unsafe { std::ptr::copy_nonoverlapping(tree.0, &mut buffer[0] as *mut _ as *mut _, len) };
     Tree(Box::into_raw(buffer) as *mut _)

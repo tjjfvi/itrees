@@ -1,5 +1,5 @@
 use crate::*;
-use std::{hint::unreachable_unchecked, mem::size_of, time::Duration};
+use std::{hint::unreachable_unchecked, time::Duration};
 
 #[derive(Default, Debug)]
 pub struct Net {
@@ -8,9 +8,9 @@ pub struct Net {
   pub comm: usize,
   pub grft: usize,
   pub time: Duration,
-  pub av: Vec<(usize, Result<Tree, usize>)>,
+  pub av: Vec<(Tree, usize, Result<Tree, usize>)>,
   pub at: Vec<PackedNode>,
-  pub bv: Vec<(usize, Result<Tree, usize>)>,
+  pub bv: Vec<(Tree, usize, Result<Tree, usize>)>,
   pub bt: Vec<PackedNode>,
 }
 
@@ -70,34 +70,63 @@ impl Net {
     self.comm += 1;
     let mut av = std::mem::take(&mut self.av);
     let mut bv = std::mem::take(&mut self.bv);
-    av.reserve(a.root().length() / 2 + 1);
-    for i in 0..a.root().length() {
+    let mut a_len = 1;
+    let mut i = 0;
+    while i < a_len {
       let node = a.node(i);
       match node {
-        Node::Auxiliary(t) if a.contains(t) => {
-          av.push((i, Err((t.0 as usize - a.0 as usize) / size_of::<usize>())))
-        }
+        // Node::Auxiliary(t) if a.contains(t) => av.push((
+        //   node.pack(),
+        //   i,
+        //   Err((t.0 as usize - a.0 as usize) / size_of::<usize>()),
+        // )),
+        // Node::Principal(p) if p.kind() == a.kind() => {
+        //   self.g += 1;
+        //   todo!()
+        // }
         Node::Auxiliary(_) | Node::Principal(_) => {
-          av.push((i, Ok(Tree::clone(b))));
+          av.push((a.offset(i), i, Ok(Tree::NULL)));
+        }
+        Node::Ctr(..) => {
+          a_len += 2;
         }
         _ => {}
       }
+      i += 1;
     }
-    bv.reserve(b.root().length() / 2 + 1);
-    for i in 0..b.root().length() {
+    let mut b_len = 1;
+    let mut i = 0;
+    while i < b_len {
+      // dbg!(i);
       let node = b.node(i);
       match node {
-        Node::Auxiliary(t) if b.contains(t) => {
-          bv.push((i, Err((t.0 as usize - b.0 as usize) / size_of::<usize>())))
-        }
+        // Node::Auxiliary(t) if b.contains(t) => bv.push((
+        //   node.pack(),
+        //   i,
+        //   Err((t.0 as usize - b.0 as usize) / size_of::<usize>()),
+        // )),
         Node::Auxiliary(_) | Node::Principal(_) => {
-          bv.push((i, Ok(Tree::clone(a))));
+          bv.push((b.offset(i), i, Ok(Tree::NULL)));
+        }
+        Node::Ctr(..) => {
+          b_len += 2;
         }
         _ => {}
       }
+      i += 1;
     }
-    for &(ai, bc) in av.iter() {
-      for &(bj, ac) in bv.iter() {
+    for (_, _, bc) in av.iter_mut() {
+      if let Ok(bc) = bc {
+        *bc = Tree::clone(b, b_len);
+      }
+    }
+    for (_, _, ac) in bv.iter_mut() {
+      if let Ok(ac) = ac {
+        *ac = Tree::clone(a, a_len);
+      }
+    }
+    for &(_, ai, bc) in av.iter() {
+      for &(_, bj, ac) in bv.iter() {
         match (ac, bc) {
           (Ok(ac), Ok(bc)) => self.link(
             Node::Auxiliary(ac.offset(ai)),
@@ -109,14 +138,14 @@ impl Net {
         }
       }
     }
-    for &(ai, bc) in &av {
+    for &(aa, _, bc) in &av {
       if let Ok(bc) = bc {
-        self.bind(a.node(ai), bc)
+        self.bind(aa.root(), bc)
       }
     }
-    for &(bi, ac) in &bv {
+    for &(ba, _, ac) in &bv {
       if let Ok(ac) = ac {
-        self.bind(b.node(bi), ac)
+        self.bind(ba.root(), ac)
       }
     }
     av.clear();
@@ -162,13 +191,35 @@ impl Net {
           }
         }
         (Node::Ctr(..), Node::Ctr(..)) => n += 2,
-        (r, Node::Ctr(l, _)) => {
+        (r, Node::Ctr(_)) => {
           self.bind(r, b);
-          b = b.offset(l - 1);
+          let mut n = 2;
+          while n > 0 {
+            b = b.offset(1);
+            match b.root() {
+              Node::Ctr(_) => {
+                n += 1;
+              }
+              _ => {
+                n -= 1;
+              }
+            }
+          }
         }
-        (Node::Ctr(l, _), r) => {
+        (Node::Ctr(_), r) => {
           self.bind(r, a);
-          a = a.offset(l - 1);
+          let mut n = 2;
+          while n > 0 {
+            a = a.offset(1);
+            match a.root() {
+              Node::Ctr(_) => {
+                n += 1;
+              }
+              _ => {
+                n -= 1;
+              }
+            }
+          }
         }
         (a, b) => self.link(a, b),
       }

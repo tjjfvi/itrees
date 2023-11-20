@@ -1,13 +1,21 @@
 use crate::*;
 
-fn print_tree(f: &mut std::fmt::Formatter, kind: Option<usize>, tree: Tree) -> std::fmt::Result {
+fn print_tree(
+  f: &mut std::fmt::Formatter,
+  kind: Option<usize>,
+  tree: Tree,
+) -> Result<Tree, std::fmt::Error> {
   match tree.root() {
-    Node::Era => write!(f, "*"),
+    Node::Era => {
+      write!(f, "*")?;
+      Ok(tree.offset(1))
+    }
     Node::Principal(t) => {
       if t.kind() == kind {
         write!(f, "#")?;
       }
-      print_tree(f, t.kind(), t)
+      print_tree(f, t.kind(), t)?;
+      Ok(tree.offset(1))
     }
     Node::Auxiliary(r) => unsafe {
       let (a, b) = (r.0, (*r.0).0 as *mut PackedNode);
@@ -16,7 +24,8 @@ fn print_tree(f: &mut std::fmt::Formatter, kind: Option<usize>, tree: Tree) -> s
       } else {
         (a, b)
       };
-      write!(f, "{:?}-{:?}", a, b)
+      write!(f, "{:?}-{:?}", a, b)?;
+      Ok(tree.offset(1))
     },
     Node::Ctr(..) => {
       match kind {
@@ -25,14 +34,15 @@ fn print_tree(f: &mut std::fmt::Formatter, kind: Option<usize>, tree: Tree) -> s
         Some(n) => write!(f, "{{{} ", n)?,
         None => write!(f, "{{?? ")?,
       }
-      print_tree(f, kind, tree.offset(1))?;
+      let tree = print_tree(f, kind, tree.offset(1))?;
       write!(f, " ")?;
-      print_tree(f, kind, tree.offset(1 + tree.node(1).length()))?;
+      let tree = print_tree(f, kind, tree)?;
       match kind {
         Some(0) => write!(f, ")"),
         Some(1) => write!(f, "]"),
         _ => write!(f, "}}"),
-      }
+      }?;
+      Ok(tree)
     }
   }
 }
