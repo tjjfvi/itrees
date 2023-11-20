@@ -119,20 +119,9 @@ impl Net {
       while i < a_len {
         let node = a.node();
         match node {
-          Node::Principal(mut p) if p.kind() == kind => {
+          Node::Principal(p) if p.kind() == kind => {
             *g += 1;
-            let mut n = 1;
-            while n > 0 {
-              let node = p.node();
-              match node {
-                Node::Ctr(..) => n += 2,
-                Node::Era => {}
-                _ => av.push((p, t.len(), Ok(Tree::NULL))),
-              }
-              t.push(node.pack());
-              n -= 1;
-              p = p.offset(1);
-            }
+            _commute_scan(g, t, p, av);
             i += 1;
             a = a.offset(1);
             continue;
