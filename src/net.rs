@@ -129,17 +129,37 @@ impl Net {
   pub fn annihilate(&mut self, mut a: Tree, mut b: Tree) {
     self.anni += 1;
     let mut n = 1usize;
-    let mut a_era_stack = 0usize;
-    let mut b_era_stack = 0usize;
     while n > 0 {
       match (a.root(), b.root()) {
         (Node::Era, Node::Ctr(..)) => {
-          n += 2;
-          a_era_stack += 2;
+          let mut n = 2;
+          while n > 0 {
+            b = b.offset(1);
+            match b.root() {
+              Node::Ctr(..) => {
+                n += 1;
+              }
+              x => {
+                self.link(x, Node::Era);
+                n -= 1;
+              }
+            }
+          }
         }
         (Node::Ctr(..), Node::Era) => {
-          n += 2;
-          b_era_stack += 2
+          let mut n = 2;
+          while n > 0 {
+            a = a.offset(1);
+            match a.root() {
+              Node::Ctr(..) => {
+                n += 1;
+              }
+              x => {
+                self.link(x, Node::Era);
+                n -= 1;
+              }
+            }
+          }
         }
         (Node::Ctr(..), Node::Ctr(..)) => n += 2,
         (r, Node::Ctr(l, _)) => {
@@ -152,16 +172,8 @@ impl Net {
         }
         (a, b) => self.link(a, b),
       }
-      if a_era_stack != 0 {
-        a_era_stack -= 1
-      } else {
-        a = a.offset(1)
-      }
-      if b_era_stack != 0 {
-        b_era_stack -= 1
-      } else {
-        b = b.offset(1)
-      }
+      a = a.offset(1);
+      b = b.offset(1);
       n -= 1;
     }
   }
