@@ -52,23 +52,25 @@ pub use tree::*;
 use std::{
   alloc::{GlobalAlloc, Layout, System},
   cell::UnsafeCell,
+  env::args,
   fmt::Debug,
+  fs,
+  time::Instant,
 };
 
 #[allow(unused)]
 fn main() {
-  let program = include_str!("../programs/dec_bits_comp.ic");
-  // let program = "a (a (x x)) = (b b)";
+  let path = args().nth(1).expect("must supply path");
 
-  let (a, mut b) = parse_program(program).unwrap();
+  let program = fs::read_to_string(path).expect("invalid file");
 
-  unsafe {
-    println!("{:?}", PrintNet(&*a, &b));
-  }
+  let (free, mut net) = parse_program(&program).unwrap();
 
-  println!("{} steps", b.reduce());
+  println!("{:?}", PrintNet(free, &net));
 
-  unsafe {
-    println!("{:?}", PrintNet(&*a, &b));
-  }
+  net.reduce();
+
+  println!("{:?}", PrintNet(free, &net));
+
+  net.print_stats();
 }

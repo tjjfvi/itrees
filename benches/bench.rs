@@ -1,22 +1,31 @@
 #![feature(test)]
 
+use std::fs;
+
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use itrees::*;
 
 extern crate test;
 
 fn bench(c: &mut Criterion) {
-  c.bench_function("test", |b| {
-    b.iter_batched(
-      || {
-        parse_program(include_str!("../programs/dec_bits_comp.ic"))
-          .unwrap()
-          .1
-      },
-      |mut net| net.reduce(),
-      BatchSize::SmallInput,
-    )
-  });
+  for path in &["programs/dec_bits.ic", "programs/dec_bits_comp.ic"] {
+    let file = fs::read_to_string(path).expect("invalid file");
+    let mut first = true;
+    c.bench_function(path, |b| {
+      b.iter_batched(
+        || parse_program(&file).unwrap().1,
+        |mut net| {
+          net.reduce();
+          if first {
+            first = false;
+            println!();
+            net.print_stats();
+          }
+        },
+        BatchSize::SmallInput,
+      )
+    });
+  }
 }
 
 criterion_group!(benches, bench);

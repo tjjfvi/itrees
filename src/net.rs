@@ -1,13 +1,17 @@
 use crate::*;
-use std::{hint::unreachable_unchecked, mem::size_of};
+use std::{hint::unreachable_unchecked, mem::size_of, time::Duration};
 
 #[derive(Default, Debug)]
 pub struct Net {
   pub active: Vec<(Tree, Tree)>,
-  pub a: usize,
-  pub c: usize,
+  pub anni: usize,
+  pub comm: usize,
+  pub grft: usize,
+  pub time: Duration,
   pub av: Vec<(usize, Result<Tree, usize>)>,
+  pub at: Vec<PackedNode>,
   pub bv: Vec<(usize, Result<Tree, usize>)>,
+  pub bt: Vec<PackedNode>,
 }
 
 impl Net {
@@ -41,29 +45,29 @@ impl Net {
     }
   }
 
-  pub fn reduce_one(&mut self) -> Option<()> {
-    let (a, b) = self.active.pop()?;
-    if a.kind().is_none() || b.kind().is_none() || a.kind() == b.kind() {
-      self.annihilate(a, b);
-    } else {
-      self.commute(a, b);
+  #[inline(never)]
+  pub fn reduce(&mut self) {
+    let start = Instant::now();
+    while let Some((a, b)) = self.active.pop() {
+      if a.kind().is_none() || b.kind().is_none() || a.kind() == b.kind() {
+        self.annihilate(a, b);
+      } else {
+        self.commute(a, b);
+      }
     }
-    Some(())
+    self.time += start.elapsed();
   }
 
-  #[inline(never)]
-  pub fn reduce(&mut self) -> i32 {
-    let mut n = 0;
-    while let Some(_) = self.reduce_one() {
-      n += 1;
-    }
-    println!("{} ann, {} com", self.a, self.c);
-    n
+  pub fn print_stats(&self) {
+    println!(
+      "anni: {}; comm: {}; grft: {}; time: {:.2?}",
+      self.anni, self.comm, self.grft, self.time
+    );
   }
 
   #[inline(never)]
   pub fn commute(&mut self, a: Tree, b: Tree) {
-    self.c += 1;
+    self.comm += 1;
     let mut av = std::mem::take(&mut self.av);
     let mut bv = std::mem::take(&mut self.bv);
     av.reserve(a.root().length() / 2 + 1);
@@ -123,7 +127,7 @@ impl Net {
 
   #[inline(never)]
   pub fn annihilate(&mut self, mut a: Tree, mut b: Tree) {
-    self.a += 1;
+    self.anni += 1;
     let mut n = 1usize;
     let mut a_era_stack = 0usize;
     let mut b_era_stack = 0usize;

@@ -37,11 +37,11 @@ fn print_tree(f: &mut std::fmt::Formatter, kind: Option<usize>, tree: Tree) -> s
   }
 }
 
-pub struct PrintNet<'a>(pub &'a [PackedNode], pub &'a Net);
+pub struct PrintNet<'a>(pub *mut [PackedNode], pub &'a Net);
 
 impl<'a> Debug for PrintNet<'a> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    for &tree in self.0 {
+    for &tree in unsafe { &*self.0 } {
       print_tree(f, None, Tree(&mut { tree } as *mut _))?;
       write!(f, "\n")?;
     }
