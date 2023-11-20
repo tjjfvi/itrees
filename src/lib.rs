@@ -13,7 +13,7 @@ mod utils;
 
 #[global_allocator]
 #[thread_local]
-static ALLOCATOR: BumpAlloc = BumpAlloc(UnsafeCell::new((None, 1 << 20)));
+static ALLOCATOR: BumpAlloc = BumpAlloc(UnsafeCell::new((None, 1 << 30)));
 
 #[derive(Default)]
 struct BumpAlloc(UnsafeCell<(Option<(*mut u8, usize)>, usize)>);
