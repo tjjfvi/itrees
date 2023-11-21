@@ -176,7 +176,7 @@ impl Net {
   }
 
   #[inline(never)]
-  pub(crate) fn annihilate(&mut self, mut a: Tree, mut b: Tree) {
+  pub(crate) fn annihilate(&mut self, mut a: Tree, mut b: Tree) -> Tree {
     self.anni += 1;
     let mut n = 1usize;
     while n > 0 {
@@ -196,6 +196,12 @@ impl Net {
               }
             }
           }
+        }
+        ((Node::Ctr(k), t), (Node::Principal(u), _))
+        | ((Node::Principal(u), _), (Node::Ctr(k), t))
+          if u.kind() == k =>
+        {
+          *t = self.annihilate(*t, u)
         }
         ((Node::Ctr(_), t), (r, _)) | ((r, _), (Node::Ctr(_), t)) => {
           self.bind(r, *t);
@@ -218,5 +224,6 @@ impl Net {
       b = b.offset(1);
       n -= 1;
     }
+    Tree(unsafe { a.0.offset(-1) })
   }
 }
