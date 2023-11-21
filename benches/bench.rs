@@ -9,6 +9,7 @@ extern crate test;
 
 fn bench(c: &mut Criterion) {
   for path in &[
+    "programs/alloc_big_tree.ic",
     "programs/dec_bits.ic",
     "programs/dec_bits_comp.ic",
     "programs/dec_bits_tree.ic",
