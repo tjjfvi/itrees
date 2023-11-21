@@ -18,7 +18,7 @@ static ALLOCATOR: BumpAlloc = BumpAlloc(UnsafeCell::new((None, 1 << 30)));
 #[derive(Default)]
 struct BumpAlloc(UnsafeCell<(Option<(*mut u8, usize)>, usize)>);
 
-const MAX_CHUNK: usize = 1 << 30;
+const CHUNK_SIZE: usize = 1 << 20;
 
 unsafe impl GlobalAlloc for BumpAlloc {
   unsafe fn alloc(&self, layout: std::alloc::Layout) -> *mut u8 {
@@ -33,7 +33,7 @@ unsafe impl GlobalAlloc for BumpAlloc {
         return r;
       }
     }
-    let len = (inner.1 << 1).min(MAX_CHUNK).max(layout.size());
+    let len = CHUNK_SIZE.max(layout.size());
     inner.1 = len;
     let alloc = System.alloc(Layout::from_size_align(len, layout.align()).unwrap());
     inner.0 = Some((alloc.offset(layout.size() as isize), len - layout.size()));
